@@ -4,7 +4,7 @@
 
 function renderUsers() {
   if (!isAdmin()) {
-    return '<div class="card"><div class="alert alert-red"><span>🔒</span><span>هذه الصفحة للمدير فقط</span></div></div>';
+    return '<div class="card"><div class="alert alert-red"><span>🔒</span><span>للمدير فقط</span></div></div>';
   }
   setTimeout(() => loadUsersPage(), 100);
   return `
@@ -12,35 +12,28 @@ function renderUsers() {
       <div class="page-header">
         <div>
           <div class="section-title" style="margin:0">👥 إدارة المستخدمين والصلاحيات</div>
-          <p class="text-xs text-gray mt4">تحكّم في صلاحيات كل مستخدم</p>
+          <p class="text-xs text-gray mt4">اضغط على الدور لتغييره مباشرة</p>
         </div>
         <button class="btn btn-primary" onclick="loadUsersPage()">🔄 تحديث</button>
       </div>
-
-      <!-- Role legend -->
       <div class="grid3 mb12" style="gap:8px">
-        <div class="card-sm" style="border-right:4px solid #7c3aed;padding:10px 12px">
-          <div style="font-size:18px;margin-bottom:4px">👑</div>
-          <div style="font-weight:700;color:#7c3aed;font-size:12px">مدير</div>
-          <div class="text-xs text-gray">كل الصلاحيات + إدارة المستخدمين والدعوات والإعدادات</div>
+        <div class="card-sm" style="border-right:4px solid #7c3aed">
+          <div style="font-size:16px;margin-bottom:3px">👑 مدير</div>
+          <div class="text-xs text-gray">كل الصلاحيات + إدارة النظام</div>
         </div>
-        <div class="card-sm" style="border-right:4px solid #1d4ed8;padding:10px 12px">
-          <div style="font-size:18px;margin-bottom:4px">✏️</div>
-          <div style="font-weight:700;color:#1d4ed8;font-size:12px">محاسب</div>
-          <div class="text-xs text-gray">إدخال + تعديل + حذف البيانات + طباعة التقارير</div>
+        <div class="card-sm" style="border-right:4px solid #1d4ed8">
+          <div style="font-size:16px;margin-bottom:3px">✏️ محاسب</div>
+          <div class="text-xs text-gray">إدخال + تعديل + حذف البيانات</div>
         </div>
-        <div class="card-sm" style="border-right:4px solid #0f766e;padding:10px 12px">
-          <div style="font-size:18px;margin-bottom:4px">👁️</div>
-          <div style="font-weight:700;color:#0f766e;font-size:12px">مراجع</div>
-          <div class="text-xs text-gray">قراءة وطباعة فقط — لا يمكنه تعديل أي بيانات</div>
+        <div class="card-sm" style="border-right:4px solid #0f766e">
+          <div style="font-size:16px;margin-bottom:3px">👁️ مراجع</div>
+          <div class="text-xs text-gray">قراءة وطباعة فقط</div>
         </div>
       </div>
-
-      <!-- Users table -->
       <div class="card" id="users-container">
         <div style="text-align:center;padding:30px;color:#94a3b8">
-          <div style="font-size:32px;margin-bottom:8px">⏳</div>
-          <p>جاري تحميل المستخدمين...</p>
+          <div style="font-size:32px">⏳</div>
+          <p class="mt4">جاري التحميل...</p>
         </div>
       </div>
     </div>`;
@@ -61,62 +54,51 @@ async function loadUsersPage() {
     if (users.length === 0) {
       el.innerHTML = `
         <div style="text-align:center;padding:40px;color:#94a3b8">
-          <div style="font-size:40px;margin-bottom:12px">👥</div>
-          <p style="font-size:14px;font-weight:600;margin-bottom:6px">لا يوجد مستخدمون بعد</p>
-          <p class="text-xs">عند تسجيل أي مستخدم سيظهر هنا تلقائياً</p>
-          <p class="text-xs mt4">اذهب إلى <strong>📧 إدارة الدعوات</strong> لإضافة مستخدم جديد</p>
+          <div style="font-size:40px;margin-bottom:10px">👥</div>
+          <p style="font-weight:600">لا يوجد مستخدمون بعد</p>
+          <p class="text-xs mt4">اذهب إلى 📧 إدارة الدعوات لإضافة مستخدم</p>
         </div>`;
       return;
     }
 
-    let rows = '';
-    users.forEach(u => {
-      const role    = u.role || 'reviewer';
-      const rInfo   = ROLES[role] || ROLES.reviewer;
-      const isAdmUsr = u.email?.toLowerCase() === ADMIN_EMAIL;
-
-      // Role buttons
-      let roleBtns = '';
-      if (isAdmUsr) {
-        roleBtns = '<span class="text-xs text-gray">مدير النظام — ثابت</span>';
-      } else {
-        Object.entries(ROLES).forEach(([k, v]) => {
-          const active = role === k;
-          roleBtns += `<button
-            onclick="setRole('${u.uid}', '${k}', this)"
-            style="
-              background:${active ? v.color : '#f1f5f9'};
-              color:${active ? '#fff' : '#374151'};
-              border:none;border-radius:8px;padding:5px 12px;
-              font-size:11px;font-weight:600;cursor:pointer;
-              font-family:inherit;transition:.15s;
-              ${active ? 'box-shadow:0 2px 6px ' + v.color + '40' : ''}
-            ">${v.label}</button>`;
-        });
-      }
-
-      rows += `
-        <tr id="user-row-${u.uid}">
-          <td>
-            <div style="font-weight:600;font-size:12px">${u.email || u.uid}</div>
-            ${isAdmUsr ? '<div class="text-xs" style="color:#7c3aed;font-weight:600">مدير النظام</div>' : ''}
-          </td>
-          <td>
-            <span id="role-badge-${u.uid}" style="
-              background:${rInfo.color}20;color:${rInfo.color};
-              border:1px solid ${rInfo.color}40;
-              padding:3px 10px;border-radius:20px;
-              font-size:11px;font-weight:700;white-space:nowrap
-            ">${rInfo.label}</span>
-          </td>
-          <td class="text-xs text-gray">${u.createdAt ? fmtDate(u.createdAt) : '—'}</td>
-          <td>
-            <div class="flex" style="gap:5px;flex-wrap:wrap" id="role-btns-${u.uid}">
-              ${roleBtns}
-            </div>
-          </td>
-        </tr>`;
-    });
+    // Build table
+    const tbody = users.map(u => {
+      const role   = u.role || 'reviewer';
+      const rInfo  = ROLES[role] || ROLES.reviewer;
+      const isAdmU = u.email?.toLowerCase() === ADMIN_EMAIL;
+      return `<tr>
+        <td>
+          <div style="font-weight:600;font-size:12px">${u.email || u.uid}</div>
+          ${isAdmU ? '<div class="text-xs" style="color:#7c3aed;font-weight:700">مدير النظام</div>' : ''}
+        </td>
+        <td>
+          <span id="rb-${u.uid}" style="background:${rInfo.color}20;color:${rInfo.color};border:1px solid ${rInfo.color}40;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">
+            ${rInfo.label}
+          </span>
+        </td>
+        <td class="text-xs text-gray">${u.createdAt ? fmtDate(u.createdAt) : '—'}</td>
+        <td>
+          ${isAdmU
+            ? '<span class="text-xs text-gray">ثابت</span>'
+            : `<div class="flex" style="gap:5px" id="rbg-${u.uid}">
+                ${Object.entries(ROLES).map(([k, v]) => `
+                  <button
+                    class="role-btn"
+                    data-uid="${u.uid}"
+                    data-role="${k}"
+                    style="
+                      background:${role===k ? v.color : '#f1f5f9'};
+                      color:${role===k ? '#fff' : '#374151'};
+                      border:none;border-radius:8px;padding:5px 12px;
+                      font-size:11px;font-weight:600;cursor:pointer;
+                      font-family:inherit;
+                    "
+                  >${v.label}</button>`).join('')}
+               </div>`
+          }
+        </td>
+      </tr>`;
+    }).join('');
 
     el.innerHTML = `
       <div class="tbl-wrap">
@@ -129,33 +111,35 @@ async function loadUsersPage() {
               <th>تغيير الدور</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody>${tbody}</tbody>
         </table>
       </div>`;
 
+    // ── Attach click handlers via event delegation ──────────────
+    el.querySelectorAll('.role-btn').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        const uid     = this.dataset.uid;
+        const newRole = this.dataset.role;
+        await applyRoleChange(uid, newRole);
+      });
+    });
+
   } catch (e) {
-    el.innerHTML = `
-      <div class="alert alert-red">
-        <span>❌</span>
-        <div>
-          <strong>خطأ في تحميل المستخدمين</strong><br>
-          <span class="text-xs">${e.message}</span>
-        </div>
-      </div>`;
+    el.innerHTML = `<div class="alert alert-red"><span>❌</span><span>${e.message}</span></div>`;
   }
 }
 
-// ── Set Role ─────────────────────────────────────────────────────
-async function setRole(uid, newRole, btn) {
+// ── Apply role change ─────────────────────────────────────────────
+async function applyRoleChange(uid, newRole) {
   const rInfo = ROLES[newRole];
   if (!rInfo) return;
 
-  // Visual feedback
-  const container = document.getElementById('role-btns-' + uid);
-  if (container) {
-    const allBtns = container.querySelectorAll('button');
-    allBtns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
-  }
+  // Disable all buttons in that user's group
+  const group = document.getElementById('rbg-' + uid);
+  if (group) group.querySelectorAll('.role-btn').forEach(b => {
+    b.disabled = true;
+    b.style.opacity = '0.5';
+  });
 
   try {
     await firebase.firestore().collection('_users').doc(uid).update({
@@ -164,36 +148,33 @@ async function setRole(uid, newRole, btn) {
       updatedBy: ADMIN_EMAIL,
     });
 
-    // Update badge
-    const badge = document.getElementById('role-badge-' + uid);
+    // Update badge color + label
+    const badge = document.getElementById('rb-' + uid);
     if (badge) {
-      badge.textContent  = rInfo.label;
-      badge.style.color  = rInfo.color;
-      badge.style.background = rInfo.color + '20';
+      badge.textContent   = rInfo.label;
+      badge.style.color   = rInfo.color;
+      badge.style.background  = rInfo.color + '20';
       badge.style.borderColor = rInfo.color + '40';
     }
 
-    // Update buttons
-    if (container) {
-      const allBtns = container.querySelectorAll('button');
-      allBtns.forEach(b => {
-        b.disabled = false;
-        b.style.opacity = '1';
-        const btnRole = b.getAttribute('onclick').match(/'([^']+)'\s*,\s*this/)?.[1] ||
-                        b.getAttribute('onclick').match(/"([^"]+)"\s*,\s*this/)?.[1];
-        // Simpler: reload
+    // Update button styles
+    if (group) {
+      group.querySelectorAll('.role-btn').forEach(b => {
+        const isActive = b.dataset.role === newRole;
+        b.disabled        = false;
+        b.style.opacity   = '1';
+        b.style.background = isActive ? rInfo.color : '#f1f5f9';
+        b.style.color      = isActive ? '#fff' : '#374151';
       });
     }
 
     toast('✅ تم تغيير الدور إلى ' + rInfo.label);
-    // Reload to reflect changes
-    setTimeout(() => loadUsersPage(), 500);
 
   } catch (e) {
     toast('❌ خطأ: ' + e.message, 'error');
-    if (container) {
-      const allBtns = container.querySelectorAll('button');
-      allBtns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-    }
+    if (group) group.querySelectorAll('.role-btn').forEach(b => {
+      b.disabled      = false;
+      b.style.opacity = '1';
+    });
   }
 }
