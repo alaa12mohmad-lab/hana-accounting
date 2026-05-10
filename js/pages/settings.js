@@ -1,3 +1,37 @@
+function buildThemeHTML(){
+  var themes = [
+    {k:'default', label:'أزرق داكن', icon:'🔵', desc:'الافتراضي', bg:'#1F4E78'},
+    {k:'dark',    label:'داكن',       icon:'🌙', desc:'مريح ليلاً', bg:'#1e293b'},
+    {k:'green',   label:'أخضر',       icon:'🟢', desc:'هادئ للعين', bg:'#059669'},
+    {k:'purple',  label:'بنفسجي',     icon:'🟣', desc:'أنيق',       bg:'#7c3aed'},
+    {k:'slate',   label:'رمادي',      icon:'⚫', desc:'محايد',      bg:'#475569'},
+    {k:'rose',    label:'وردي',       icon:'🔴', desc:'دافئ',       bg:'#e11d48'},
+  ];
+  var cur = localStorage.getItem('hana_theme') || 'default';
+  var cards = '';
+  themes.forEach(function(t){
+    var active = t.k === cur;
+    var border = active ? '3px solid '+t.bg : '2px solid #e2e8f0';
+    var scale  = active ? 'scale(1.05)' : 'scale(1)';
+    var check  = active ? '<div style="position:absolute;top:4px;left:4px;background:#fff;border-radius:50%;width:16px;height:16px;text-align:center;line-height:16px;font-size:10px;font-weight:700;color:#16a34a">✓</div>' : '';
+    cards += '<div onclick="applyTheme(\'' + t.k + '\')" style="cursor:pointer;border-radius:10px;overflow:hidden;outline:' + border + ';transform:' + scale + ';transition:all .2s;background:#fff">'
+      + '<div style="height:55px;background:' + t.bg + ';position:relative">' + check + '</div>'
+      + '<div style="padding:8px;text-align:center">'
+      + '<div style="font-size:15px">' + t.icon + '</div>'
+      + '<div style="font-size:10px;font-weight:700;margin-top:2px">' + t.label + '</div>'
+      + '<div style="font-size:9px;color:#64748b">' + t.desc + '</div>'
+      + '</div></div>';
+  });
+  return '<div class="card mt12">'
+    + '<div class="section-title">🎨 الثيم والألوان</div>'
+    + '<p class="text-xs text-gray mb10">اضغط على أي ثيم لتطبيقه فوراً</p>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px">'
+    + cards + '</div>'
+    + '<div class="alert alert-blue mt10" style="font-size:11px"><span>💡</span>'
+    + '<span>ثيم <strong>داكن 🌙</strong> مريح للعمل الليلي</span></div>'
+    + '</div>';
+}
+
 // ═══ COMPANY SETTINGS & BACKUP ═══
 // ═══════════════════════════════════════════════════════
 function renderCompany(){
