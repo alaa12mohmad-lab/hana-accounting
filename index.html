@@ -206,5 +206,60 @@
 <p style="text-align:center;font-size:9px;color:#94a3b8;padding:6px;margin:0">
   © 2026 شركة الهنا للنقل
 </p>
+
+<script>
+// ── دوال إدارة المستخدمين (معرّفة هنا لضمان التحميل دائماً) ──
+window.changeUserRole = async function(uid, role) {
+  if (!uid || !role) return;
+  var rInfo = (typeof ROLES !== 'undefined') ? ROLES[role] : null;
+  var label = rInfo ? rInfo.label : role;
+  var color = rInfo ? rInfo.color : '#1F4E78';
+
+  // تعطيل الأزرار
+  document.querySelectorAll('button[data-uid="'+uid+'"], button[data-k="'+role+'"]').forEach(function(b){
+    b.disabled = true; b.style.opacity = '0.4';
+  });
+
+  try {
+    await firebase.firestore().collection('_users').doc(uid).update({
+      role: role, updatedAt: Date.now(), updatedBy: '3laalafi@gmail.com'
+    });
+
+    // تحديث الشارة
+    var badge = document.getElementById('rb-'+uid);
+    if (badge) {
+      badge.textContent      = label;
+      badge.style.color      = color;
+      badge.style.background = color+'20';
+      badge.style.borderColor= color+'40';
+    }
+
+    // تحديث ألوان الأزرار
+    document.querySelectorAll('button[data-uid="'+uid+'"]').forEach(function(b){
+      var bRole  = b.getAttribute('data-role') || b.getAttribute('data-k');
+      var active = bRole === role;
+      var bColor = (typeof ROLES!=='undefined' && ROLES[bRole]) ? ROLES[bRole].color : '#1F4E78';
+      b.disabled         = false;
+      b.style.opacity    = '1';
+      b.style.background = active ? bColor : '#f1f5f9';
+      b.style.color      = active ? '#fff'  : '#374151';
+      b.style.border     = active ? '2px solid '+bColor : '2px solid #e2e8f0';
+    });
+
+    if (typeof toast === 'function') toast('✅ تم تغيير الدور إلى '+label);
+    else alert('✅ تم تغيير الدور إلى '+label);
+
+  } catch(e) {
+    if (typeof toast === 'function') toast('❌ '+e.message, 'error');
+    else alert('❌ '+e.message);
+    document.querySelectorAll('button[data-uid="'+uid+'"]').forEach(function(b){
+      b.disabled = false; b.style.opacity = '1';
+    });
+  }
+};
+
+window.applyRoleChange = window.changeUserRole;
+</script>
+
 </body>
 </html>
