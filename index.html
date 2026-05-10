@@ -292,5 +292,92 @@ window.applyTheme = function(name){
 })();
 </script>
 
+
+<script>
+// ══ PWA Install Prompt ══════════════════════════════════════════
+var _pwaPrompt = null;
+var _pwaShown  = false;
+
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  _pwaPrompt = e;
+  // Show after 4 seconds
+  setTimeout(showPWABanner, 4000);
+});
+
+function showPWABanner() {
+  if (_pwaShown || document.getElementById('pwa-banner')) return;
+  _pwaShown = true;
+  var banner = document.createElement('div');
+  banner.id = 'pwa-banner';
+  banner.innerHTML =
+    '<div class="pwa-info">'
+    + '<div class="pwa-icon">🚛</div>'
+    + '<div><div class="pwa-title">شركة الهنا للنقل</div>'
+    + '<div class="pwa-sub">ثبّت التطبيق للوصول السريع</div></div>'
+    + '</div>'
+    + '<div class="pwa-btns">'
+    + '<button class="btn-install" onclick="installPWA()">⬇️ تثبيت</button>'
+    + '<button class="btn-later" onclick="dismissPWA()">×</button>'
+    + '</div>';
+  document.body.appendChild(banner);
+}
+
+function installPWA() {
+  if (!_pwaPrompt) return;
+  _pwaPrompt.prompt();
+  _pwaPrompt.userChoice.then(function(r) {
+    if (r.outcome === 'accepted' && typeof toast === 'function') {
+      toast('✅ تم تثبيت التطبيق بنجاح!');
+    }
+    _pwaPrompt = null;
+    dismissPWA();
+  });
+}
+
+function dismissPWA() {
+  var b = document.getElementById('pwa-banner');
+  if (b) {
+    b.style.transform = 'translateY(100%)';
+    b.style.transition = 'transform .3s';
+    setTimeout(function(){ b.remove(); }, 300);
+  }
+}
+
+window.addEventListener('appinstalled', function() {
+  dismissPWA();
+  if (typeof toast === 'function') toast('✅ التطبيق مثبّت على جهازك!');
+});
+
+// ── Mobile Sidebar ───────────────────────────────────────────────
+function openMobSidebar() {
+  document.getElementById('sidebar').classList.add('mob-open');
+  document.getElementById('mob-overlay').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+function closeMobSidebar() {
+  document.getElementById('sidebar').classList.remove('mob-open');
+  document.getElementById('mob-overlay').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function toggleSidebarMobile() {
+  var isOpen = document.getElementById('sidebar').classList.contains('mob-open');
+  if (window.innerWidth <= 768) {
+    isOpen ? closeMobSidebar() : openMobSidebar();
+  } else {
+    document.getElementById('sidebar').classList.toggle('closed');
+    document.getElementById('main').classList.toggle('full');
+  }
+}
+function initMobileSidebar() {
+  // Close sidebar when any nav link is clicked on mobile
+  document.querySelectorAll('.sb-link').forEach(function(el) {
+    el.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeMobSidebar();
+    });
+  });
+}
+</script>
+
 </body>
 </html>
