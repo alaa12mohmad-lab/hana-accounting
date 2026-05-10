@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function(){
     partners:      renderPartners,
     company:       renderCompany,
     users:         renderUsers,
-    themes:        renderThemes,
+    themes:        typeof renderThemes==='function' ? renderThemes : function(){return '<div class="card"><p>ارفع ملف themes.js</p></div>';},
     invitations:   renderInvitations,
   });
 
