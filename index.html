@@ -264,72 +264,29 @@ window.applyRoleChange = window.changeUserRole;
 
 
 <script>
-// ════════════════════════════════════════════════════════════════
-// THEMES — نظام الثيمات (inline للتأكد من التحميل دائماً)
-// ════════════════════════════════════════════════════════════════
-var THEMES = {
-  default: {label:'أزرق داكن', icon:'🔵', desc:'الثيم الافتراضي الكلاسيكي',  bg:'linear-gradient(135deg,#1a2d45,#1F4E78)'},
-  dark:    {label:'داكن',       icon:'🌙', desc:'مريح في الإضاءة المنخفضة',   bg:'linear-gradient(135deg,#0f172a,#1e293b)'},
-  green:   {label:'أخضر',       icon:'🟢', desc:'هادئ ومريح للعين',           bg:'linear-gradient(135deg,#064e3b,#059669)'},
-  purple:  {label:'بنفسجي',     icon:'🟣', desc:'أنيق وعصري',                 bg:'linear-gradient(135deg,#2e1065,#7c3aed)'},
-  slate:   {label:'رمادي',      icon:'⚫', desc:'محايد واحترافي',              bg:'linear-gradient(135deg,#0f172a,#475569)'},
-  rose:    {label:'وردي',       icon:'🔴', desc:'دافئ ومميّز',                 bg:'linear-gradient(135deg,#4c0519,#e11d48)'},
+window.THEMES = {
+  default:{label:'أزرق داكن',icon:'🔵',desc:'الافتراضي',bg:'#1F4E78'},
+  dark:   {label:'داكن',      icon:'🌙',desc:'مريح ليلاً',bg:'#1e293b'},
+  green:  {label:'أخضر',      icon:'🟢',desc:'هادئ للعين',bg:'#059669'},
+  purple: {label:'بنفسجي',    icon:'🟣',desc:'أنيق',      bg:'#7c3aed'},
+  slate:  {label:'رمادي',     icon:'⚫',desc:'محايد',     bg:'#475569'},
+  rose:   {label:'وردي',      icon:'🔴',desc:'دافئ',      bg:'#e11d48'},
 };
-
-window.applyTheme = function(name) {
-  var theme = THEMES[name] ? name : 'default';
-  if (theme === 'default') {
-    document.documentElement.removeAttribute('data-theme');
-  } else {
-    document.documentElement.setAttribute('data-theme', theme);
-  }
+window.applyTheme = function(name){
+  var theme = window.THEMES[name] ? name : 'default';
+  if(theme==='default') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('hana_theme', theme);
-  document.querySelectorAll('.theme-card').forEach(function(card) {
-    var active = card.getAttribute('data-theme') === theme;
-    card.style.outline   = active ? '3px solid var(--brand,#1F4E78)' : '2px solid #e2e8f0';
-    card.style.transform = active ? 'scale(1.04)' : 'scale(1)';
-    card.style.boxShadow = active ? '0 4px 16px rgba(0,0,0,.15)' : 'none';
-  });
-  if (typeof toast === 'function') toast('🎨 تم تطبيق ثيم ' + THEMES[theme].label);
-};
-
-window.renderThemePicker = function() {
-  var current = localStorage.getItem('hana_theme') || 'default';
-  var cards = Object.keys(THEMES).map(function(key) {
-    var t = THEMES[key];
-    var active = key === current;
-    return '<div class="theme-card" data-theme="'+key+'" onclick="applyTheme(''+key+'')" '
-      + 'style="cursor:pointer;border-radius:12px;overflow:hidden;transition:all .2s;background:#fff;'
-      + 'outline:' + (active ? '3px solid var(--brand,#1F4E78)' : '2px solid #e2e8f0') + ';'
-      + 'transform:' + (active ? 'scale(1.04)' : 'scale(1)') + ';'
-      + 'box-shadow:' + (active ? '0 4px 16px rgba(0,0,0,.15)' : 'none') + '">'
-      + '<div style="height:65px;' + t.bg + ';position:relative">'
-      + '<div style="position:absolute;top:8px;right:8px;left:8px;height:10px;background:rgba(255,255,255,.3);border-radius:5px"></div>'
-      + '<div style="position:absolute;top:24px;right:8px;width:45%;height:7px;background:rgba(255,255,255,.4);border-radius:4px"></div>'
-      + '<div style="position:absolute;top:37px;right:8px;left:8px;height:6px;background:rgba(255,255,255,.2);border-radius:3px"></div>'
-      + (active ? '<div style="position:absolute;top:5px;left:5px;background:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#16a34a">✓</div>' : '')
-      + '</div>'
-      + '<div style="padding:9px;text-align:center">'
-      + '<div style="font-size:16px;margin-bottom:2px">' + t.icon + '</div>'
-      + '<div style="font-size:11px;font-weight:700;color:#1a202c">' + t.label + '</div>'
-      + '<div style="font-size:9px;color:#64748b;margin-top:1px">' + t.desc + '</div>'
-      + '</div></div>';
-  }).join('');
-
-  return '<div class="card"><div class="section-title">🎨 الثيم والألوان</div>'
-    + '<p class="text-xs text-gray mb12">اختر الثيم المناسب — يُحفظ تلقائياً ويظهر فوراً</p>'
-    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px">'
-    + cards + '</div>'
-    + '<div class="alert alert-blue mt12" style="font-size:11px">'
-    + '<span>💡</span><span>ثيم <strong>داكن 🌙</strong> مريح جداً للعمل الليلي</span></div></div>';
-};
-
-// تطبيق الثيم المحفوظ عند التحميل
-(function(){
-  var saved = localStorage.getItem('hana_theme');
-  if (saved && saved !== 'default') {
-    document.documentElement.setAttribute('data-theme', saved);
+  if(typeof toast==='function') toast('🎨 ثيم '+window.THEMES[theme].label);
+  // Refresh settings if open
+  var el=document.getElementById('content');
+  if(el && document.querySelector('.sb-link.active[onclick*="company"]')) {
+    setTimeout(function(){nav('company');},100);
   }
+};
+(function(){
+  var s=localStorage.getItem('hana_theme');
+  if(s&&s!=='default') document.documentElement.setAttribute('data-theme',s);
 })();
 </script>
 
