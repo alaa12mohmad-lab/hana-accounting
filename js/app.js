@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function(){
     partners:      renderPartners,
     company:       renderCompany,
     users:         renderUsers,
+    themes:        renderThemes,
     invitations:   renderInvitations,
   });
 
