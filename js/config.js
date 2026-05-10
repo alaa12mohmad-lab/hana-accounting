@@ -82,6 +82,7 @@ const PAGE_TITLES = {
   suppliers:'الموردون وأسعارهم', materials:'الخامات',
   trucks:'السيارات', partners:'الشركاء',
   company:'إعدادات الشركة', users:'إدارة المستخدمين',
+  themes:'الثيم والألوان',
   invitations:'إدارة الدعوات',
 };
 
