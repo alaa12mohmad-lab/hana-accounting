@@ -1,4 +1,4 @@
-// Service Worker — شركة الهنا للنقل v5 Multi-file
+// Service Worker — شركة الهنا للنقل v5
 const CACHE = 'hana-v5';
 const ASSETS = [
   './',
@@ -27,21 +27,11 @@ const ASSETS = [
   './js/pages/stmt-advanced.js',
 ];
 
-const CDN = [
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js',
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js',
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-];
-
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache =>
-      Promise.allSettled([
-        ...ASSETS.map(u => cache.add(u).catch(()=>{})),
-        ...CDN.map(u => cache.add(u).catch(()=>{})),
-      ])
-    ).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(cache => Promise.allSettled(ASSETS.map(u => cache.add(u).catch(()=>{}))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -55,22 +45,41 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = e.request.url;
-  // Firebase API calls — always network
-  if(url.includes('firestore.googleapis.com')||
-     url.includes('identitytoolkit.googleapis.com')||
-     url.includes('securetoken.googleapis.com')) return;
-  // CDN — cache first
-  if(url.includes('gstatic.com/firebasejs')||url.includes('cdnjs.cloudflare.com')){
-    e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request).then(r=>{
-      caches.open(CACHE).then(cache=>cache.put(e.request,r.clone()));
-      return r;
-    })));
+  // Firebase API — always network, skip SW
+  if (url.includes('firestore.googleapis.com') ||
+      url.includes('identitytoolkit.googleapis.com') ||
+      url.includes('securetoken.googleapis.com')) return;
+
+  // CDN scripts — cache first
+  if (url.includes('gstatic.com') || url.includes('cdnjs.cloudflare.com')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(resp => {
+          if (resp.ok) {
+            const clone = resp.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return resp;
+        }).catch(() => cached);
+      })
+    );
     return;
   }
+
   // App files — network first, cache fallback
   e.respondWith(
     fetch(e.request)
-      .then(r=>{ caches.open(CACHE).then(c=>c.put(e.request,r.clone())); return r; })
-      .catch(()=>caches.match(e.request).then(c=>c||caches.match('./index.html')))
+      .then(resp => {
+        if (resp.ok && e.request.method === 'GET') {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return resp;
+      })
+      .catch(() =>
+        caches.match(e.request)
+          .then(cached => cached || caches.match('./index.html'))
+      )
   );
 });
