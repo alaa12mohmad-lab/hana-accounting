@@ -118,7 +118,7 @@ window.loadUsersPage = async function() {
   }
 };
 
-window.applyRoleChange = async function(uid, newRole) {
+window.applyRoleChange = window.changeUserRole = async function(uid, newRole) {
   if (!uid || !newRole) { console.error('applyRoleChange: missing args', uid, newRole); return; }
   const rInfo = ROLES[newRole];
   if (!rInfo) { console.error('applyRoleChange: unknown role', newRole); return; }
