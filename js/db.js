@@ -195,8 +195,6 @@ function createSupabaseRepo() {
 //  FACTORY — change this ONE line to switch to Supabase
 // ═══════════════════════════════════════════════════════════════════════════
 // DB = Firebase if configured, else localStorage
-const DB = (typeof buildDB === "function") ? buildDB() : createLocalRepo();
-
 // ═══════════════════════════════════════════════════════════════════════════
 //  SHADOW COPY & RECOVERY
 // ═══════════════════════════════════════════════════════════════════════════
