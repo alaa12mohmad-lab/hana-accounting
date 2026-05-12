@@ -36,7 +36,29 @@ function buildThemeHTML(){
 // ═══════════════════════════════════════════════════════
 function renderCompany(){
   const c=DB.getCompany();
+
+  // Logo section
+  var co = DB.getCompany();
+  var logoSection = '<div class="card mb12">'
+    + '<div class="section-title">🖼️ شعار الشركة</div>'
+    + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
+    + '<div id="logo-preview" style="width:90px;height:90px;border:2px dashed #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#f8fafc;overflow:hidden;flex-shrink:0">'
+    + (co.logo
+        ? '<img src="'+co.logo+'" style="width:90px;height:90px;object-fit:contain">'
+        : '<div style="text-align:center;color:#94a3b8"><div style="font-size:28px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>')
+    + '</div>'
+    + '<div style="flex:1">'
+    + '<p class="text-xs text-gray mb8">يظهر الشعار في: الشريط الجانبي، التقارير، الفواتير المطبوعة</p>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<label style="display:inline-flex;align-items:center;gap:6px;background:#1F4E78;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600">'
+    + '📁 اختر شعاراً<input type="file" id="logo-input" accept="image/*" onchange="previewLogo(this)" style="display:none"></label>'
+    + (co.logo ? '<button class="btn btn-red btn-sm" onclick="removeLogo()">🗑️ حذف الشعار</button>' : '')
+    + '</div>'
+    + '<p class="text-xs text-gray mt6">PNG أو JPG • حجم أقصى 500KB • يُحفظ تلقائياً</p>'
+    + '</div></div></div>';
+
   return `<div>
+    \${logoSection}
     <div class="grid2" style="gap:16px;align-items:start">
 
       <!-- Company Info Card -->
@@ -121,6 +143,7 @@ function renderCompany(){
         </div>
       </div>
     </div>
+  \${buildThemeHTML()}
   </div>`;
 }
 
@@ -183,3 +206,34 @@ function clearAllData(){
 // EXPENSES & FUEL MANAGEMENT — إدارة المصروفات والوقود
 // ═══════════════════════════════════════════════════════
 let _EXP_FILTER={cat:'الكل',from:'',to:'',truck:''};
+// ── Logo Functions ────────────────────────────────────────────────
+function previewLogo(input){
+  var file = input.files[0];
+  if(!file) return;
+  if(file.size > 600000){ toast('حجم الملف كبير جداً — الحد 500KB','error'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var base64 = e.target.result;
+    // Preview
+    var preview = document.getElementById('logo-preview');
+    if(preview) preview.innerHTML = '<img src="'+base64+'" style="width:90px;height:90px;object-fit:contain">';
+    // Save to Firebase
+    var co = DB.getCompany();
+    DB.setCompany({...co, logo: base64});
+    // Update sidebar
+    if(typeof updateSidebarLogo==='function') setTimeout(updateSidebarLogo,300);
+    toast('✅ تم حفظ الشعار');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLogo(){
+  if(!confirm('حذف شعار الشركة؟')) return;
+  var co = DB.getCompany();
+  delete co.logo;
+  DB.setCompany({...co, logo:''});
+  var preview = document.getElementById('logo-preview');
+  if(preview) preview.innerHTML = '<div style="text-align:center;color:#94a3b8"><div style="font-size:28px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
+  if(typeof updateSidebarLogo==='function') setTimeout(updateSidebarLogo,300);
+  toast('تم حذف الشعار');
+}
