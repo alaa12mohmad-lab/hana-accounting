@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="css/app.css">
 
   <!-- PWA -->
+  <link rel="shortcut icon" href="icon-192.png">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1F4E78">
   <meta name="mobile-web-app-capable" content="yes">
@@ -46,7 +47,7 @@
 <div id="auth-screen">
   <div id="auth-card">
     <div style="background:linear-gradient(135deg,#1F4E78,#1e40af);padding:28px 24px;text-align:center;color:#fff">
-      <div style="font-size:52px;margin-bottom:10px;line-height:1">🚛</div>
+      <div id="auth-logo" style="margin-bottom:10px;line-height:1"><span style="font-size:52px">🚛</span></div>
       <h1 style="font-size:20px;font-weight:800;margin:0 0 4px">شركة الهنا للنقل</h1>
       <p style="font-size:11px;opacity:.7;margin:0">النظام المحاسبي الإداري</p>
     </div>
@@ -433,90 +434,196 @@ if(typeof onDBReady === 'function'){
 </script>
 
 
+
+
 <script>
-/* ══ Logo Injection — runs after every nav() ══════════════════ */
-(function(){
-  var _origNav = null;
-  function injectLogoSection(){
-    var co; try{ co=DB.getCompany(); }catch(e){ return; }
-    // Remove old logo card if exists
-    var old = document.getElementById('logo-card');
-    if(old) old.remove();
-    // Only inject on company page
-    var active = document.querySelector('.sb-link.active');
-    if(!active || active.getAttribute('onclick').indexOf('company')<0) return;
-    // Build logo card
-    var preview = co.logo
-      ? '<img src="'+co.logo+'" style="width:90px;height:90px;object-fit:contain;border-radius:8px">'
-      : '<div style="text-align:center;color:#94a3b8"><div style="font-size:30px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
-    var delBtn = co.logo
-      ? '<button onclick="removeLogo()" class="btn btn-red btn-sm">🗑️ حذف الشعار</button>'
-      : '';
-    var card = document.createElement('div');
-    card.id = 'logo-card';
-    card.className = 'card mb12';
-    card.innerHTML =
-      '<div class="section-title">🖼️ شعار الشركة</div>'
-      +'<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
-      +'<div id="logo-preview" style="width:90px;height:90px;border:2px dashed #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg,#f8fafc);overflow:hidden;flex-shrink:0">'
-      +preview+'</div>'
-      +'<div style="flex:1">'
-      +'<p class="text-xs text-gray mb8">يظهر في: الشريط الجانبي والتقارير والفواتير المطبوعة</p>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
-      +'<label style="display:inline-flex;align-items:center;gap:6px;background:#1F4E78;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">'
-      +'📁 اختر شعاراً'
-      +'<input type="file" id="logo-input" accept="image/*" onchange="previewLogo(this)" style="display:none">'
-      +'</label>'+delBtn+'</div>'
-      +'<p class="text-xs text-gray mt6">PNG أو JPG • حجم أقصى 500KB • يُحفظ في Firebase</p>'
-      +'</div></div>';
-    // Insert at top of content
-    var content = document.getElementById('content');
-    if(content && content.firstChild){
-      content.insertBefore(card, content.firstChild);
-    }
-  }
+/* ══════════════════════════════════════════════════════════════
+   LOGO SYSTEM — Favicon + PWA Icon + Sidebar + Reports
+══════════════════════════════════════════════════════════════ */
 
-  // Hook into nav
-  document.addEventListener('DOMContentLoaded', function(){
-    var _origNav2 = window.nav;
-    window.nav = function(page){
-      _origNav2(page);
-      setTimeout(injectLogoSection, 80);
-    };
-    // Also inject on first load of company page
-    setTimeout(injectLogoSection, 500);
+// ── Set favicon dynamically from logo ─────────────────────────
+function setFavicon(src){
+  if(!src){ resetFavicon(); return; }
+  var img = new Image();
+  img.onload = function(){
+    var c = document.createElement('canvas');
+    c.width = c.height = 64;
+    var ctx = c.getContext('2d');
+    // Rounded background
+    ctx.fillStyle = '#1F4E78';
+    ctx.beginPath(); ctx.roundRect(0,0,64,64,12); ctx.fill();
+    // Draw logo centered
+    var s = Math.min(img.width,img.height);
+    var x = (img.width-s)/2, y=(img.height-s)/2;
+    ctx.drawImage(img,x,y,s,s,6,6,52,52);
+    var ico = c.toDataURL('image/png');
+    // Update all favicon links
+    ['icon','shortcut icon','apple-touch-icon'].forEach(function(rel){
+      var el = document.querySelector('link[rel="'+rel+'"]');
+      if(!el){ el=document.createElement('link'); el.rel=rel; document.head.appendChild(el); }
+      el.href = ico;
+    });
+    // Update PWA manifest icons dynamically
+    updateManifestIcon(ico, src);
+  };
+  img.onerror = function(){ resetFavicon(); };
+  img.src = src;
+}
+
+function resetFavicon(){
+  ['icon','shortcut icon'].forEach(function(rel){
+    var el = document.querySelector('link[rel="'+rel+'"]');
+    if(el) el.href = 'icon-192.png';
   });
-})();
+}
 
-/* ══ Logo Functions ════════════════════════════════════════════ */
-window.previewLogo = function(input){
-  var file = input.files[0];
-  if(!file) return;
-  if(file.size > 600000){ if(typeof toast==='function') toast('حجم الملف كبير — الحد 500KB','error'); return; }
+// ── Update PWA manifest with company logo ──────────────────────
+function updateManifestIcon(ico64, original){
+  try{
+    var co = DB.getCompany();
+    var manifestObj = {
+      name: co.name || 'شركة الهنا للنقل',
+      short_name: (co.name||'الهنا').substring(0,12),
+      description: 'النظام المحاسبي الإداري',
+      start_url: './',
+      display: 'standalone',
+      background_color: '#1F4E78',
+      theme_color: '#1F4E78',
+      lang: 'ar', dir: 'rtl',
+      icons: [
+        {src: original||ico64, sizes:'192x192', type:'image/png', purpose:'any maskable'},
+        {src: original||ico64, sizes:'512x512', type:'image/png', purpose:'any maskable'}
+      ]
+    };
+    var blob = new Blob([JSON.stringify(manifestObj)], {type:'application/manifest+json'});
+    var url  = URL.createObjectURL(blob);
+    var link = document.querySelector('link[rel="manifest"]');
+    if(link) link.href = url;
+  }catch(e){ console.warn('manifest update failed:', e); }
+}
+
+// ── Update sidebar logo ────────────────────────────────────────
+window.updateSidebarLogo = function(){
+  try{
+    var co  = DB.getCompany();
+    // Sidebar name
+    var nm  = document.getElementById('sb-company-name');
+    if(nm) nm.textContent = co.name || 'شركة الهنا للنقل';
+    // Sidebar icon
+    var pic   = document.getElementById('sb-logo-pic');
+    var emoji = document.getElementById('sb-logo-emoji');
+    if(co.logo){
+      if(pic)  { pic.src=co.logo; pic.style.display='block'; }
+      if(emoji){ emoji.style.display='none'; }
+      setFavicon(co.logo);
+    } else {
+      if(pic)  { pic.style.display='none'; }
+      if(emoji){ emoji.style.display='block'; }
+      resetFavicon();
+    }
+    // Auth screen logo
+    var authLogo = document.getElementById('auth-logo');
+    if(authLogo){
+      authLogo.innerHTML = co.logo
+        ? '<img src="'+co.logo+'" style="height:70px;width:auto;object-fit:contain;border-radius:10px">'
+        : '<span style="font-size:52px">🚛</span>';
+    }
+  }catch(e){}
+};
+
+// ── Inject logo card into company settings page ────────────────
+function injectLogoCard(){
+  if(document.getElementById('logo-card')) return;
+  var active = document.querySelector('.sb-link.active');
+  if(!active||active.getAttribute('onclick').indexOf('company')<0) return;
+  var content = document.getElementById('content');
+  if(!content) return;
+  var co; try{ co=DB.getCompany(); }catch(e){ return; }
+
+  var previewInner = co.logo
+    ? '<img src="'+co.logo+'" style="width:90px;height:90px;object-fit:contain;border-radius:8px">'
+    : '<div style="text-align:center;color:#94a3b8"><div style="font-size:32px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
+
+  var card = document.createElement('div');
+  card.id = 'logo-card';
+  card.className = 'card mb12';
+  card.style.borderTop = '3px solid #1F4E78';
+  card.innerHTML =
+    '<div class="section-title">🖼️ شعار الشركة</div>'
+    +'<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:8px">'
+    +'<div id="logo-preview" style="width:90px;height:90px;border:2px dashed #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#f8fafc;overflow:hidden;flex-shrink:0">'+previewInner+'</div>'
+    +'<div style="flex:1;min-width:180px">'
+    +'<p class="text-xs text-gray mb10">يظهر في: تبويب المتصفح ← أيقونة التطبيق ← الشريط الجانبي ← جميع التقارير والفواتير المطبوعة</p>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<label style="display:inline-flex;align-items:center;gap:6px;background:#1F4E78;color:#fff;border-radius:8px;padding:9px 16px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">'
+    +'📁 اختر شعار الشركة'
+    +'<input type="file" id="logo-file" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp" style="display:none" onchange="uploadLogo(this)">'
+    +'</label>'
+    +(co.logo?'<button onclick="deleteLogo()" class="btn btn-red btn-sm">🗑️ حذف</button>':'')
+    +'</div>'
+    +'<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">'
+    +'<span class="text-xs text-gray">✅ PNG / JPG / SVG</span>'
+    +'<span class="text-xs text-gray">✅ حجم أقصى 500KB</span>'
+    +'<span class="text-xs text-gray">✅ يُحفظ ويظهر لجميع المستخدمين</span>'
+    +'</div>'
+    +'</div></div>';
+
+  // Insert before first child
+  if(content.firstChild) content.insertBefore(card, content.firstChild);
+  else content.appendChild(card);
+}
+
+// ── Logo upload ────────────────────────────────────────────────
+window.uploadLogo = function(input){
+  var file = input.files[0]; if(!file) return;
+  if(file.size > 600000){ if(typeof toast==='function') toast('الحجم كبير — الحد الأقصى 500KB','error'); return; }
   var reader = new FileReader();
   reader.onload = function(e){
     var b64 = e.target.result;
-    var preview = document.getElementById('logo-preview');
-    if(preview) preview.innerHTML = '<img src="'+b64+'" style="width:90px;height:90px;object-fit:contain;border-radius:8px">';
-    var co = DB.getCompany();
-    co.logo = b64;
-    DB.setCompany(co);
+    // Update preview
+    var prev = document.getElementById('logo-preview');
+    if(prev) prev.innerHTML = '<img src="'+b64+'" style="width:90px;height:90px;object-fit:contain;border-radius:8px">';
+    // Save
+    var co = DB.getCompany(); co.logo = b64; DB.setCompany(co);
+    // Apply everywhere
+    setFavicon(b64);
     updateSidebarLogo();
-    if(typeof toast==='function') toast('✅ تم حفظ الشعار');
+    if(typeof toast==='function') toast('✅ تم حفظ الشعار وتطبيقه في كل مكان');
   };
   reader.readAsDataURL(file);
 };
 
-window.removeLogo = function(){
+window.deleteLogo = function(){
   if(!confirm('حذف شعار الشركة؟')) return;
-  var co = DB.getCompany();
-  co.logo = '';
-  DB.setCompany(co);
-  var preview = document.getElementById('logo-preview');
-  if(preview) preview.innerHTML = '<div style="text-align:center;color:#94a3b8"><div style="font-size:30px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
-  updateSidebarLogo();
+  var co = DB.getCompany(); co.logo = ''; DB.setCompany(co);
+  var prev = document.getElementById('logo-preview');
+  if(prev) prev.innerHTML = '<div style="text-align:center;color:#94a3b8"><div style="font-size:32px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
+  resetFavicon(); updateSidebarLogo();
   if(typeof toast==='function') toast('تم حذف الشعار');
+  // Reload logo card to remove delete button
+  document.getElementById('logo-card')?.remove();
+  injectLogoCard();
 };
+
+// ── Hook nav to inject logo card ───────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  // Wait for nav to be defined
+  setTimeout(function(){
+    var _origNav = window.nav;
+    if(typeof _origNav==='function'){
+      window.nav = function(page){
+        _origNav(page);
+        if(page==='company') setTimeout(injectLogoCard, 100);
+      };
+    }
+    // Load logo on startup
+    if(typeof onDBReady==='function'){
+      onDBReady(function(){
+        setTimeout(updateSidebarLogo, 300);
+      });
+    }
+  }, 800);
+});
 </script>
 
 </body>
