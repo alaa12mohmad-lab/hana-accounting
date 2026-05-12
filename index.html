@@ -99,9 +99,12 @@
 <div id="sidebar">
   <div class="sb-logo" style="position:relative">
     <button onclick="closeMobSidebar()" class="mob-close-btn">✕</button>
-    <div class="sb-logo-icon">🚛</div>
+    <div id="sb-logo-img" style="width:42px;height:42px;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.15);flex-shrink:0">
+      <span id="sb-logo-emoji" style="font-size:24px">🚛</span>
+      <img id="sb-logo-pic" style="display:none;width:42px;height:42px;object-fit:contain" src="" alt="">
+    </div>
     <div>
-      <div class="sb-logo-text">شركة الهنا للنقل</div>
+      <div class="sb-logo-text" id="sb-company-name">شركة الهنا للنقل</div>
       <div class="sb-logo-sub">النظام المحاسبي v5</div>
     </div>
   </div>
@@ -395,5 +398,39 @@ window.changeUserRole = async function(uid,role){
 };
 window.applyRoleChange=window.changeUserRole;
 </script>
+
+<script>
+// Update sidebar logo & name when DB is ready
+function updateSidebarLogo(){
+  try{
+    var co = DB.getCompany();
+    var name = co.name || 'شركة الهنا للنقل';
+    var el = document.getElementById('sb-company-name');
+    if(el) el.textContent = name;
+    
+    var pic   = document.getElementById('sb-logo-pic');
+    var emoji = document.getElementById('sb-logo-emoji');
+    if(co.logo && pic && emoji){
+      pic.src = co.logo;
+      pic.style.display = 'block';
+      emoji.style.display = 'none';
+    } else if(pic && emoji){
+      pic.style.display = 'none';
+      emoji.style.display = 'block';
+    }
+    
+    // Update auth screen logo too
+    var authIcon = document.querySelector('#auth-screen .auth-icon');
+    if(authIcon && co.logo){
+      authIcon.innerHTML = '<img src="'+co.logo+'" style="height:70px;width:auto;object-fit:contain;border-radius:10px">';
+    }
+  }catch(e){}
+}
+// Called after DB loads
+if(typeof onDBReady === 'function'){
+  onDBReady(function(){ setTimeout(updateSidebarLogo, 500); });
+}
+</script>
+
 </body>
 </html>
