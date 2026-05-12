@@ -432,5 +432,92 @@ if(typeof onDBReady === 'function'){
 }
 </script>
 
+
+<script>
+/* ══ Logo Injection — runs after every nav() ══════════════════ */
+(function(){
+  var _origNav = null;
+  function injectLogoSection(){
+    var co; try{ co=DB.getCompany(); }catch(e){ return; }
+    // Remove old logo card if exists
+    var old = document.getElementById('logo-card');
+    if(old) old.remove();
+    // Only inject on company page
+    var active = document.querySelector('.sb-link.active');
+    if(!active || active.getAttribute('onclick').indexOf('company')<0) return;
+    // Build logo card
+    var preview = co.logo
+      ? '<img src="'+co.logo+'" style="width:90px;height:90px;object-fit:contain;border-radius:8px">'
+      : '<div style="text-align:center;color:#94a3b8"><div style="font-size:30px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
+    var delBtn = co.logo
+      ? '<button onclick="removeLogo()" class="btn btn-red btn-sm">🗑️ حذف الشعار</button>'
+      : '';
+    var card = document.createElement('div');
+    card.id = 'logo-card';
+    card.className = 'card mb12';
+    card.innerHTML =
+      '<div class="section-title">🖼️ شعار الشركة</div>'
+      +'<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
+      +'<div id="logo-preview" style="width:90px;height:90px;border:2px dashed #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg,#f8fafc);overflow:hidden;flex-shrink:0">'
+      +preview+'</div>'
+      +'<div style="flex:1">'
+      +'<p class="text-xs text-gray mb8">يظهر في: الشريط الجانبي والتقارير والفواتير المطبوعة</p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      +'<label style="display:inline-flex;align-items:center;gap:6px;background:#1F4E78;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">'
+      +'📁 اختر شعاراً'
+      +'<input type="file" id="logo-input" accept="image/*" onchange="previewLogo(this)" style="display:none">'
+      +'</label>'+delBtn+'</div>'
+      +'<p class="text-xs text-gray mt6">PNG أو JPG • حجم أقصى 500KB • يُحفظ في Firebase</p>'
+      +'</div></div>';
+    // Insert at top of content
+    var content = document.getElementById('content');
+    if(content && content.firstChild){
+      content.insertBefore(card, content.firstChild);
+    }
+  }
+
+  // Hook into nav
+  document.addEventListener('DOMContentLoaded', function(){
+    var _origNav2 = window.nav;
+    window.nav = function(page){
+      _origNav2(page);
+      setTimeout(injectLogoSection, 80);
+    };
+    // Also inject on first load of company page
+    setTimeout(injectLogoSection, 500);
+  });
+})();
+
+/* ══ Logo Functions ════════════════════════════════════════════ */
+window.previewLogo = function(input){
+  var file = input.files[0];
+  if(!file) return;
+  if(file.size > 600000){ if(typeof toast==='function') toast('حجم الملف كبير — الحد 500KB','error'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var b64 = e.target.result;
+    var preview = document.getElementById('logo-preview');
+    if(preview) preview.innerHTML = '<img src="'+b64+'" style="width:90px;height:90px;object-fit:contain;border-radius:8px">';
+    var co = DB.getCompany();
+    co.logo = b64;
+    DB.setCompany(co);
+    updateSidebarLogo();
+    if(typeof toast==='function') toast('✅ تم حفظ الشعار');
+  };
+  reader.readAsDataURL(file);
+};
+
+window.removeLogo = function(){
+  if(!confirm('حذف شعار الشركة؟')) return;
+  var co = DB.getCompany();
+  co.logo = '';
+  DB.setCompany(co);
+  var preview = document.getElementById('logo-preview');
+  if(preview) preview.innerHTML = '<div style="text-align:center;color:#94a3b8"><div style="font-size:30px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
+  updateSidebarLogo();
+  if(typeof toast==='function') toast('تم حذف الشعار');
+};
+</script>
+
 </body>
 </html>
