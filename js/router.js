@@ -40,7 +40,7 @@ function statusBadge(s){
 }
 
 // ── Print Helper ──────────────────────────────────────────────────
-const PRINT_CSS_BASE=`*{font-family:Tahoma,sans-serif;direction:rtl;margin:0;padding:0;box-sizing:border-box}
+const PRINT_CSS_BASE=`*{font-family:Tahoma,sans-serif;direction:rtl;margin:0;padding:0;box-sizing:border-box}img{max-width:100%}
 body{padding:14px;font-size:11px;color:#1f2937}
 .hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1F4E78;padding-bottom:9px;margin-bottom:12px}
 .co{font-size:16px;font-weight:700;color:#1F4E78}
@@ -59,10 +59,21 @@ function _pw(title,body){
   w.document.close();
 }
 function printHeaderHTML(){
-  const co=DB.getCompany();
-  return '<div class="hdr"><div class="co">'+(co.name||'شركة الهنا للنقل')+
-    (co.crNumber?'<div style="font-size:9px;color:#666">س.ت: '+co.crNumber+'</div>':'')+
-    '</div><div style="text-align:left;font-size:10px;color:#666">'+fmtDate(Date.now())+'</div></div>';
+  var co=DB.getCompany();
+  var logoTag='';
+  if(co.logo){
+    logoTag='<img src="'+co.logo+'" style="height:50px;width:auto;object-fit:contain;border-radius:4px">';
+  } else {
+    logoTag='<div style="font-size:28px">🚛</div>';
+  }
+  var info='<div class="co">'+(co.name||'شركة الهنا للنقل')+'</div>';
+  if(co.crNumber)  info+='<div style="font-size:9px;color:#666">س.ت: '+co.crNumber+'</div>';
+  if(co.vatNumber) info+='<div style="font-size:9px;color:#666">الرقم الضريبي: '+co.vatNumber+'</div>';
+  if(co.phone)     info+='<div style="font-size:9px;color:#666">📞 '+co.phone+'</div>';
+  return '<div class="hdr">'
+    +'<div style="display:flex;align-items:center;gap:10px">'+logoTag+'<div>'+info+'</div></div>'
+    +'<div style="text-align:left;font-size:10px;color:#666">'+fmtDate(Date.now())+'</div>'
+    +'</div>';
 }
 
 // ── Price Helpers ─────────────────────────────────────────────────
