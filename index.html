@@ -295,7 +295,7 @@ function showPWABanner(){
     +'<div class="pwa-sub">ثبّت التطبيق للوصول السريع من الشاشة الرئيسية</div></div></div>'
     +'<div style="display:flex;gap:8px;flex-shrink:0">'
     +'<button class="btn-install" onclick="installPWA()">⬇️ تثبيت</button>'
-    +'<button class="btn-dismiss" onclick="this.closest('#pwa-banner').remove()">×</button>'
+    +'<button class="btn-dismiss" onclick="document.getElementById(\'pwa-banner\').remove()">×</button>'
     +'</div>';
   document.body.appendChild(d);
 }
