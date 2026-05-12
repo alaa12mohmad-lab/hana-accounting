@@ -58,7 +58,7 @@ function renderCompany(){
     + '</div></div></div>';
 
   return `<div>
-    \${logoSection}
+    ${logoSection}
     <div class="grid2" style="gap:16px;align-items:start">
 
       <!-- Company Info Card -->
