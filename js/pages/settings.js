@@ -39,22 +39,28 @@ function renderCompany(){
 
   // Logo section
   var co = DB.getCompany();
+  var logoPreviewContent = co.logo
+    ? '<img src="'+co.logo+'" style="width:90px;height:90px;object-fit:contain">'
+    : '<div style="text-align:center;color:#94a3b8"><div style="font-size:30px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>';
+  var deleteBtn = co.logo
+    ? '<button class="btn btn-red btn-sm" onclick="removeLogo()">🗑️ حذف الشعار</button>'
+    : '';
   var logoSection = '<div class="card mb12">'
     + '<div class="section-title">🖼️ شعار الشركة</div>'
     + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
     + '<div id="logo-preview" style="width:90px;height:90px;border:2px dashed #e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#f8fafc;overflow:hidden;flex-shrink:0">'
-    + (co.logo
-        ? '<img src="'+co.logo+'" style="width:90px;height:90px;object-fit:contain">'
-        : '<div style="text-align:center;color:#94a3b8"><div style="font-size:28px">🖼️</div><div style="font-size:9px;margin-top:4px">لا يوجد شعار</div></div>')
+    + logoPreviewContent
     + '</div>'
     + '<div style="flex:1">'
-    + '<p class="text-xs text-gray mb8">يظهر الشعار في: الشريط الجانبي، التقارير، الفواتير المطبوعة</p>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-    + '<label style="display:inline-flex;align-items:center;gap:6px;background:#1F4E78;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600">'
-    + '📁 اختر شعاراً<input type="file" id="logo-input" accept="image/*" onchange="previewLogo(this)" style="display:none"></label>'
-    + (co.logo ? '<button class="btn btn-red btn-sm" onclick="removeLogo()">🗑️ حذف الشعار</button>' : '')
+    + '<p class="text-xs text-gray mb8">يظهر في: الشريط الجانبي والتقارير والفواتير المطبوعة</p>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<label style="display:inline-flex;align-items:center;gap:6px;background:#1F4E78;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">'
+    + '📁 اختر شعاراً'
+    + '<input type="file" id="logo-input" accept="image/*" onchange="previewLogo(this)" style="display:none">'
+    + '</label>'
+    + deleteBtn
     + '</div>'
-    + '<p class="text-xs text-gray mt6">PNG أو JPG • حجم أقصى 500KB • يُحفظ تلقائياً</p>'
+    + '<p class="text-xs text-gray mt6">PNG أو JPG أو SVG • حجم أقصى 500KB • يُحفظ تلقائياً</p>'
     + '</div></div></div>';
 
   return `<div>
