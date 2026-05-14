@@ -140,6 +140,7 @@
     <div class="sb-link" onclick="nav('trucks')"><span class="ic">🚛</span>السيارات</div>
     <div class="sb-link" onclick="nav('partners')"><span class="ic">🤝</span>الشركاء</div>
     <div class="sb-link" onclick="nav('company')"><span class="ic">⚙️</span>إعدادات الشركة</div>
+    <div class="sb-link" onclick="nav('backup')"><span class="ic">💾</span>النسخ الاحتياطي</div>
     <div class="sb-link" onclick="nav('themes')"><span class="ic">🎨</span>الثيم والألوان</div>
     <div class="sb-link" id="sb-users" onclick="nav('users')" style="display:none">
       <span class="ic">👥</span>إدارة المستخدمين
@@ -184,6 +185,41 @@
      JavaScript — loaded in dependency order
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
 <!-- 1. Constants & validators -->
+
+<script>
+/* ══ Sarkis Core Functions (always loaded) ════════════════════ */
+function calcLine(l){
+  var trips=Number(l.trips)||0, cubic=Number(l.cubicPerTrip)||0;
+  var disc=Number(l.discountM)||0, sell=Number(l.sellPrice)||0, buy=Number(l.buyPrice)||0;
+  var gross=trips*cubic, net=Math.max(0,gross-disc);
+  return Object.assign({},l,{
+    grossCubic:parseFloat(gross.toFixed(3)),
+    netCubic:parseFloat(net.toFixed(3)),
+    sellTotal:parseFloat((net*sell).toFixed(2)),
+    buyTotal:parseFloat((net*buy).toFixed(2)),
+    profit:parseFloat((net*(sell-buy)).toFixed(2))
+  });
+}
+function calcSarkiTotals(lines){
+  var r={totalGross:0,totalNet:0,totalSell:0,totalBuy:0,totalProfit:0,totalTrips:0};
+  (lines||[]).forEach(function(l){
+    r.totalGross+=Number(l.grossCubic)||0; r.totalNet+=Number(l.netCubic)||0;
+    r.totalSell+=Number(l.sellTotal)||0;   r.totalBuy+=Number(l.buyTotal)||0;
+    r.totalProfit+=Number(l.profit)||0;    r.totalTrips+=Number(l.trips)||0;
+  });
+  return {
+    totalGross:parseFloat(r.totalGross.toFixed(3)),
+    totalNet:parseFloat(r.totalNet.toFixed(3)),
+    totalSell:parseFloat(r.totalSell.toFixed(2)),
+    totalBuy:parseFloat(r.totalBuy.toFixed(2)),
+    totalProfit:parseFloat(r.totalProfit.toFixed(2)),
+    totalTrips:r.totalTrips
+  };
+}
+var _SK_LINES=[], _SK_EDIT=null;
+window._SF={client:'كل العملاء',status:'كل الحالات'};
+</script>
+
 <script src="js/config.js"></script>
 <!-- 2. Database layer (localStorage + Firebase) -->
 <script src="js/db.js"></script>
@@ -205,6 +241,8 @@
 <script src="js/pages/stmt-advanced.js"></script>
 <script src="js/pages/users.js"></script>
 <script src="js/pages/themes.js"></script>
+<script src="js/backup.js"></script>
+<script src="js/dual-firebase.js"></script>
 <!-- 5. Firebase + Auth + Invitations -->
 <script src="js/firebase.js"></script>
 <!-- 6. Bootstrap -->
