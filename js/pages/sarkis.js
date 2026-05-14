@@ -1,8 +1,6 @@
 // ═══ SARKIS / MANIFESTS ═══
 
 // ── Global state ──────────────────────────────────────────────
-var _SK_LINES = [];
-var _SK_EDIT  = null;
 
 // ── renderSarkis (main page) ───────────────────────────────────
 function renderSarkis(){
@@ -100,51 +98,10 @@ function kpi(label, val, icon, color){
     +'</div>';
 }
 
-window._SF = {client:'كل العملاء', status:'كل الحالات'};
 
 
 // ── Calculation Helpers ───────────────────────────────────────
-function calcLine(l){
-  var trips        = Number(l.trips)        || 0;
-  var cubicPerTrip = Number(l.cubicPerTrip) || 0;
-  var discountM    = Number(l.discountM)    || 0;
-  var sellPrice    = Number(l.sellPrice)    || 0;
-  var buyPrice     = Number(l.buyPrice)     || 0;
 
-  var grossCubic = trips * cubicPerTrip;
-  var netCubic   = Math.max(0, grossCubic - discountM);
-  var sellTotal  = netCubic * sellPrice;
-  var buyTotal   = netCubic * buyPrice;
-  var profit     = sellTotal - buyTotal;
-
-  return Object.assign({}, l, {
-    grossCubic: parseFloat(grossCubic.toFixed(3)),
-    netCubic:   parseFloat(netCubic.toFixed(3)),
-    sellTotal:  parseFloat(sellTotal.toFixed(2)),
-    buyTotal:   parseFloat(buyTotal.toFixed(2)),
-    profit:     parseFloat(profit.toFixed(2)),
-  });
-}
-
-function calcSarkiTotals(lines){
-  var r = {totalGross:0, totalNet:0, totalSell:0, totalBuy:0, totalProfit:0, totalTrips:0};
-  (lines||[]).forEach(function(l){
-    r.totalGross  += Number(l.grossCubic) || 0;
-    r.totalNet    += Number(l.netCubic)   || 0;
-    r.totalSell   += Number(l.sellTotal)  || 0;
-    r.totalBuy    += Number(l.buyTotal)   || 0;
-    r.totalProfit += Number(l.profit)     || 0;
-    r.totalTrips  += Number(l.trips)      || 0;
-  });
-  return {
-    totalGross:  parseFloat(r.totalGross.toFixed(3)),
-    totalNet:    parseFloat(r.totalNet.toFixed(3)),
-    totalSell:   parseFloat(r.totalSell.toFixed(2)),
-    totalBuy:    parseFloat(r.totalBuy.toFixed(2)),
-    totalProfit: parseFloat(r.totalProfit.toFixed(2)),
-    totalTrips:  r.totalTrips,
-  };
-}
 
 
 function openSarkiModal(editId){
