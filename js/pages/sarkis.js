@@ -447,3 +447,36 @@ function renderJournal(){
     </table></div>
   </div>`;
 }
+// ── Filter Modal ──────────────────────────────────────────────
+function openSkFilter(){
+  openModal('فلتر/رهش/موي — السركي',
+    '<div class="form-group mb10"><label>العميل</label>'
+    +'<select id="sf-client" style="width:100%"><option>كل العملاء</option>'
+    +DB.getAll('customers').map(function(c){return '<option'+(window._SF&&window._SF.client===c.name?' selected':'')+'>'+c.name+'</option>';}).join('')
+    +'</select></div>'
+    +'<div class="form-group mb10"><label>الحالة</label>'
+    +'<select id="sf-status" style="width:100%">'
+    +['كل الحالات','مفتوح','معتمد','ملغي'].map(function(st){return '<option'+(window._SF&&window._SF.status===st?' selected':'')+'>'+st+'</option>';}).join('')
+    +'</select></div>',
+    '<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>'
+    +'<button class="btn btn-primary" onclick="applySkFilter()">تطبيق</button>',
+    'modal-sm');
+}
+
+function applySkFilter(){
+  window._SF = {
+    client: document.getElementById('sf-client')?.value || 'كل العملاء',
+    status: document.getElementById('sf-status')?.value || 'كل الحالات',
+  };
+  closeModal();
+  nav('sarkis');
+}
+
+// ── Excel Import wrapper ──────────────────────────────────────
+function importSarkiExcel(){
+  if(typeof openSarkiImportModal === 'function'){
+    openSarkiImportModal();
+  } else {
+    toast('ميزة الاستيراد غير متاحة حالياً','error');
+  }
+}
