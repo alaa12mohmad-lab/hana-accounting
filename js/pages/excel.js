@@ -232,7 +232,7 @@ function parseExcelFile(file){
   const reader = new FileReader();
   reader.onload = e=>{
     try{
-      const wb  = XLSX.read(e.target.result, {type:'binary'});
+      const wb  = XLSX.read(e.target.result, {type:'binary', cellDates:true, dateNF:'yyyy-mm-dd'});
       // Find sheet named 'بيانات الحوافظ' or use first sheet
       const sheetName = wb.SheetNames.find(n=>n.includes('حوافظ')||n.includes('بيانات')) || wb.SheetNames[0];
       const ws  = wb.Sheets[sheetName];
