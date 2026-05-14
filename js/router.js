@@ -282,3 +282,29 @@ function calcSarkiTotals(lines){
     totalTrips:  r.totalTrips,
   };
 }
+
+
+// ── Excel Date → yyyy-MM-dd ──────────────────────────────────
+function excelDateToStr(val){
+  if(!val) return '';
+  if(typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}$/)) return val;
+  // Excel serial number
+  if(typeof val === 'number' || (typeof val === 'string' && !isNaN(val))){
+    var n = Number(val);
+    if(n > 1000 && n < 100000){
+      // Excel serial: days since 1900-01-01 (with 1900 bug)
+      var d = new Date(Date.UTC(1900,0,1) + (n-2)*86400000);
+      return d.toISOString().slice(0,10);
+    }
+    // Unix timestamp in ms
+    if(n > 1000000000000){
+      return new Date(n).toISOString().slice(0,10);
+    }
+  }
+  // Try parse as date string
+  try{
+    var d2 = new Date(val);
+    if(!isNaN(d2)) return d2.toISOString().slice(0,10);
+  }catch(e){}
+  return '';
+}
