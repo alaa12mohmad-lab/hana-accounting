@@ -1,5 +1,152 @@
 // ═══ SARKIS / MANIFESTS ═══
 
+// ── Global state ──────────────────────────────────────────────
+var _SK_LINES = [];
+var _SK_EDIT  = null;
+
+// ── renderSarkis (main page) ───────────────────────────────────
+function renderSarkis(){
+  var recs   = DB.getAll('sarkis');
+  var clients = DB.getAll('customers').map(function(c){return c.name;});
+
+  // Filter state
+  if(typeof _SF==='undefined') window._SF={client:'كل العملاء',status:'كل الحالات'};
+  var filtered = recs.filter(function(s){
+    if(_SF.client!=='كل العملاء' && s.client!==_SF.client) return false;
+    if(_SF.status!=='كل الحالات' && s.status!==_SF.status) return false;
+    return true;
+  }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  // Totals
+  var totSell=0, totBuy=0, totProfit=0, totTrips=0;
+  filtered.forEach(function(s){
+    totSell   += Number(s.totalSell)||0;
+    totBuy    += Number(s.totalBuy)||0;
+    totProfit += Number(s.totalProfit)||0;
+    totTrips  += (s.lines||[]).reduce(function(t,l){return t+(Number(l.trips)||0);},0);
+  });
+
+  var cusOpts = ['كل العملاء'].concat(clients).map(function(c){
+    return '<option'+(c===_SF.client?' selected':'')+'>'+c+'</option>';
+  }).join('');
+  var stOpts = ['كل الحالات','مفتوح','معتمد','ملغي'].map(function(st){
+    return '<option'+(st===_SF.status?' selected':'')+'>'+st+'</option>';
+  }).join('');
+
+  return '<div>'
+    + '<div class="page-header">'
+    + '<div class="section-title" style="margin:0">📋 الحوافظ اليومية (السركي)</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button class="btn btn-primary" onclick="openSarkiModal()">＋ حافظة جديدة</button>'
+    + '<button class="btn btn-gray btn-sm" onclick="openSkFilter()">فلتر/رهش/موي</button>'
+    + '<button class="btn btn-green btn-sm" onclick="if(typeof importSarkiExcel===\'function\')importSarkiExcel()">📊 استيراد من Excel</button>'
+    + '</div></div>'
+
+    // Filter bar
+    + '<div class="card mb12" style="padding:10px 14px">'
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<select onchange="_SF.client=this.value;nav(\'sarkis\')" style="border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12px">'+cusOpts+'</select>'
+    + '<select onchange="_SF.status=this.value;nav(\'sarkis\')" style="border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12px">'+stOpts+'</select>'
+    + ((_SF.client!=='كل العملاء'||_SF.status!=='كل الحالات')
+        ? '<button class="btn btn-gray btn-sm" onclick="_SF={client:\'كل العملاء\',status:\'كل الحالات\'};nav(\'sarkis\')">✕ مسح</button>'
+        : '')
+    + '<span class="text-xs text-gray">'+filtered.length+' حافظة</span>'
+    + '</div></div>'
+
+    // KPIs
+    + '<div class="grid4 mb12" style="gap:8px">'
+    + kpi('إجمالي المبيعات', curr(totSell), '💰', '#16a34a')
+    + kpi('إجمالي التكلفة',  curr(totBuy),  '💸', '#dc2626')
+    + kpi('صافي الربح',      curr(totProfit),'📈', '#1F4E78')
+    + kpi('عدد النقلات',     totTrips,       '🚛', '#d97706')
+    + '</div>'
+
+    // Table
+    + '<div class="tbl-wrap"><table>'
+    + '<thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>المورد</th><th>الخامة</th>'
+    + '<th>م³ صافي</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الحالة</th><th>إجراء</th></tr></thead>'
+    + '<tbody>'
+    + (filtered.length===0
+        ? '<tr><td colspan="11" class="tbl-empty"><span class="tbl-empty-icon">📋</span>لا توجد حوافظ — أضف حافظة جديدة</td></tr>'
+        : filtered.map(function(sk){
+            var netM3 = (sk.lines||[]).reduce(function(t,l){return t+(Number(l.netCubic)||0);},0);
+            return '<tr>'
+              +'<td class="font-bold">#'+sk.id+'</td>'
+              +'<td class="text-xs">'+fmtDate(sk.date)+'</td>'
+              +'<td><strong>'+sk.client+'</strong></td>'
+              +'<td class="text-gray">'+sk.supplier+'</td>'
+              +'<td class="text-xs">'+sk.material+'</td>'
+              +'<td class="font-bold">'+netM3.toFixed(1)+'</td>'
+              +'<td class="text-green font-bold">'+curr(sk.totalSell)+'</td>'
+              +'<td class="text-red">'+curr(sk.totalBuy)+'</td>'
+              +'<td class="font-bold" style="color:'+(sk.totalProfit>=0?'#16a34a':'#dc2626')+'">'+curr(sk.totalProfit)+'</td>'
+              +'<td>'+statusBadge(sk.status||'مفتوح')+'</td>'
+              +'<td><div class="flex" style="gap:4px">'
+              +'<button class="btn btn-xs" style="background:#1F4E78;color:#fff;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="viewSarki('+sk.id+')">عرض</button>'
+              +'<button class="btn btn-xs" style="background:#f1f5f9;color:#374151;border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="openSarkiModal('+sk.id+')">تعديل</button>'
+              +(sk.status!=='معتمد'?'<button class="btn btn-xs" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="approveSarki('+sk.id+')">اعتماد</button>':'')
+              +'<button class="btn btn-xs" style="background:#dc2626;color:#fff;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="deleteSarki('+sk.id+')">🗑️</button>'
+              +'</div></td></tr>';
+          }).join(''))
+    + '</tbody></table></div>'
+    + '</div>';
+}
+
+function kpi(label, val, icon, color){
+  return '<div class="card-sm text-center" style="border-top:3px solid '+color+'">'
+    +'<div style="font-size:18px;margin-bottom:4px">'+icon+'</div>'
+    +'<div style="font-size:11px;color:#64748b;margin-bottom:4px">'+label+'</div>'
+    +'<div style="font-size:16px;font-weight:700;color:'+color+'">'+val+'</div>'
+    +'</div>';
+}
+
+window._SF = {client:'كل العملاء', status:'كل الحالات'};
+
+
+// ── Calculation Helpers ───────────────────────────────────────
+function calcLine(l){
+  var trips        = Number(l.trips)        || 0;
+  var cubicPerTrip = Number(l.cubicPerTrip) || 0;
+  var discountM    = Number(l.discountM)    || 0;
+  var sellPrice    = Number(l.sellPrice)    || 0;
+  var buyPrice     = Number(l.buyPrice)     || 0;
+
+  var grossCubic = trips * cubicPerTrip;
+  var netCubic   = Math.max(0, grossCubic - discountM);
+  var sellTotal  = netCubic * sellPrice;
+  var buyTotal   = netCubic * buyPrice;
+  var profit     = sellTotal - buyTotal;
+
+  return Object.assign({}, l, {
+    grossCubic: parseFloat(grossCubic.toFixed(3)),
+    netCubic:   parseFloat(netCubic.toFixed(3)),
+    sellTotal:  parseFloat(sellTotal.toFixed(2)),
+    buyTotal:   parseFloat(buyTotal.toFixed(2)),
+    profit:     parseFloat(profit.toFixed(2)),
+  });
+}
+
+function calcSarkiTotals(lines){
+  var r = {totalGross:0, totalNet:0, totalSell:0, totalBuy:0, totalProfit:0, totalTrips:0};
+  (lines||[]).forEach(function(l){
+    r.totalGross  += Number(l.grossCubic) || 0;
+    r.totalNet    += Number(l.netCubic)   || 0;
+    r.totalSell   += Number(l.sellTotal)  || 0;
+    r.totalBuy    += Number(l.buyTotal)   || 0;
+    r.totalProfit += Number(l.profit)     || 0;
+    r.totalTrips  += Number(l.trips)      || 0;
+  });
+  return {
+    totalGross:  parseFloat(r.totalGross.toFixed(3)),
+    totalNet:    parseFloat(r.totalNet.toFixed(3)),
+    totalSell:   parseFloat(r.totalSell.toFixed(2)),
+    totalBuy:    parseFloat(r.totalBuy.toFixed(2)),
+    totalProfit: parseFloat(r.totalProfit.toFixed(2)),
+    totalTrips:  r.totalTrips,
+  };
+}
+
+
 function openSarkiModal(editId){
   _SK_EDIT=editId||null;
   const sk=editId?DB.getById('sarkis',editId):null;
