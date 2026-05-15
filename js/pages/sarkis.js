@@ -1,16 +1,16 @@
 function buildSkThead(){
   var cols = [
-    {key:'id',       label:'رقم'},
-    {key:'date',     label:'التاريخ'},
-    {key:'client',   label:'العميل'},
-    {key:'supplier', label:'المورد'},
-    {key:'material', label:'الخامة'},
-    {key:'netM3',    label:'م³ صافي'},
+    {key:'id',          label:'رقم'},
+    {key:'date',        label:'التاريخ'},
+    {key:'client',      label:'العميل'},
+    {key:'supplier',    label:'المورد'},
+    {key:'material',    label:'الخامة'},
+    {key:'netM3',       label:'م³ صافي'},
     {key:'totalSell',   label:'المبيعات'},
     {key:'totalBuy',    label:'التكلفة'},
     {key:'totalProfit', label:'الربح'},
-    {key:'status',   label:'الحالة'},
-    {key:null,       label:'إجراء'},
+    {key:'status',      label:'الحالة'},
+    {key:null,          label:'إجراء'},
   ];
   var sf  = window._SF || {};
   var out = '<tr>';
@@ -20,12 +20,13 @@ function buildSkThead(){
     } else {
       var active = sf.sortKey === c.key;
       var arrow  = active ? (sf.sortDir===-1 ? ' ▼' : ' ▲') : ' ⇅';
-      out += '<th onclick="sortSarkiBy(\''+c.key+'\');" style="'
+      // Use data-key attribute to avoid quote issues in onclick
+      out += '<th data-skey="'+c.key+'" onclick="sortSarkiBy(this.dataset.skey)" style="'
         + 'padding:6px 4px;cursor:pointer;user-select:none;white-space:nowrap;'
-        + (active ? 'background:rgba(255,255,255,.15);' : 'opacity:.9;')
+        + (active ? 'background:rgba(255,255,255,.2);' : '')
         + '">'
         + c.label
-        + '<span style="font-size:8px;margin-right:3px;opacity:.8">'+arrow+'</span>'
+        + '<span style="font-size:8px;margin-right:3px">' + arrow + '</span>'
         + '</th>';
     }
   });
