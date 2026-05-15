@@ -17,6 +17,24 @@ function showAuthTab(tab){
 function showAuthErr(id,msg){ const el=document.getElementById(id); if(el){el.style.display='flex';el.innerHTML='<span style="margin-left:5px">❌</span><span>'+msg+'</span>';} }
 function clearAuthErr(id){ const el=document.getElementById(id); if(el){el.style.display='none';el.innerHTML='';} }
 
+// ── Reset Password ───────────────────────────────────────────────
+function resetPassword(){
+  const email = document.getElementById('login-email')?.value?.trim();
+  if(!email) return showAuthErr('login-err','أدخل بريدك الإلكتروني أولاً');
+  firebase.auth().sendPasswordResetEmail(email)
+    .then(function(){
+      showAuthErr('login-err','✅ تم إرسال رابط إعادة تعيين كلمة المرور إلى: '+email);
+      document.getElementById('login-err').style.background='#f0fdf4';
+      document.getElementById('login-err').style.color='#16a34a';
+      document.getElementById('login-err').style.borderColor='#bbf7d0';
+    })
+    .catch(function(e){
+      showAuthErr('login-err', e.code==='auth/user-not-found'
+        ? 'هذا البريد غير مسجّل في النظام'
+        : e.message);
+    });
+}
+
 // ── Login ────────────────────────────────────────────────────────
 async function doLogin(){
   const email=document.getElementById('login-email')?.value?.trim();
