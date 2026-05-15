@@ -37,10 +37,20 @@ async function doLogin(){
 // ── Invitation Check ─────────────────────────────────────────────
 async function checkInvitation(email){
   if(email.toLowerCase()===ADMIN_EMAIL) return true;
+  var emailLower = email.toLowerCase();
   try{
-    const snap=await firebase.firestore().collection('invitations').where('email','==',email.toLowerCase()).where('active','==',true).get();
-    return !snap.empty;
-  }catch{return false;}
+    // Primary check: active invitations
+    var snap=await firebase.firestore().collection('invitations')
+      .where('email','==',emailLower).where('active','==',true).get();
+    if(!snap.empty) return true;
+    // Fallback: any invitation not explicitly disabled
+    var snap2=await firebase.firestore().collection('invitations')
+      .where('email','==',emailLower).get();
+    return snap2.docs.some(function(d){
+      var data=d.data();
+      return data.active!==false && !data.revoked;
+    });
+  }catch(e){ console.warn('checkInvitation:',e.message); return false; }
 }
 
 // ── Register ─────────────────────────────────────────────────────
@@ -176,7 +186,10 @@ function initAuthFlow(){
       hideAuthScreen();
       renderUserBadge(user);
       setConnStatus('connected','متصل ☁️');
-      onDBReady(()=>nav('dashboard'));
+      onDBReady(function(){
+        nav('dashboard');
+        if(typeof initBackupSystem==='function') initBackupSystem();
+      });
     });
   }catch(e){
     setConnStatus('error','خطأ Firebase');
