@@ -1,6 +1,6 @@
 function buildSkThead(){
   var cols = [
-    {key:null,       label:'رقم'},
+    {key:'id',       label:'رقم'},
     {key:'date',     label:'التاريخ'},
     {key:'client',   label:'العميل'},
     {key:'supplier', label:'المورد'},
@@ -104,6 +104,7 @@ function renderSarkis(){
     var key = window._SF.sortKey||'date';
     var dir = window._SF.sortDir||(-1);
     var av, bv;
+    if(key==='id'){        return dir*((Number(a.id)||0)-(Number(b.id)||0)); }
     if(key==='date'){      av=a.date||'';       bv=b.date||'';       return dir*av.localeCompare(bv); }
     if(key==='client'){    av=a.client||'';     bv=b.client||'';     return dir*av.localeCompare(bv,'ar'); }
     if(key==='supplier'){  av=a.supplier||'';   bv=b.supplier||'';   return dir*av.localeCompare(bv,'ar'); }
