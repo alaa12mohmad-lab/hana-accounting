@@ -160,7 +160,8 @@ function openSarkiModal(editId){
             <th style="padding:6px 4px;min-width:80px">السائق</th>
             <th style="padding:6px 4px;min-width:70px">اللوحة</th>
             <th style="padding:6px 4px;min-width:55px">نقلات</th>
-            <th style="padding:6px 4px;min-width:60px">م³/نقلة</th>
+            <th style="padding:6px 4px;min-width:60px;background:#1a5276" title="تكعيب العميل">م³عميل</th>
+            <th style="padding:6px 4px;min-width:60px;background:#1a3a1a" title="تكعيب المورد">م³مورد</th>
             <th style="padding:6px 4px;min-width:55px">إجمالي م³</th>
             <th style="padding:6px 4px;min-width:50px">خصم م</th>
             <th style="padding:6px 4px;min-width:55px">صافي م³</th>
@@ -247,10 +248,17 @@ function renderSkLines(){
       <td><input placeholder="السائق" value="${line.driverName||''}" oninput="_SK_LINES[${i}].driverName=this.value" style="min-width:75px"></td>
       <td><input placeholder="اللوحة" value="${line.plateNo||''}" oninput="_SK_LINES[${i}].plateNo=this.value" style="font-family:monospace;min-width:65px"></td>
       <td><input type="number" min="0" value="${line.trips||''}" placeholder="0" oninput="_SK_LINES[${i}].trips=this.value;recalcSkLine(${i})" style="min-width:50px"></td>
-      <td><input type="number" min="0" step="0.1" value="${line.cubicPerTrip||''}" placeholder="0" oninput="_SK_LINES[${i}].cubicPerTrip=this.value;recalcSkLine(${i})" style="min-width:55px"></td>
-      <td class="calc-cell" id="sk-g-${i}">${(line.grossCubic||0).toFixed(1)}</td>
+      <td><input type="number" min="0" step="0.01" value="${line.cubicSell??line.cubicPerTrip??''}" placeholder="0"
+        title="تكعيب العميل — يؤثر على سعر البيع فقط"
+        oninput="_SK_LINES[${i}].cubicSell=Number(this.value);recalcSkLine(${i})"
+        style="min-width:55px;border-bottom:2px solid #1a5276"></td>
+      <td><input type="number" min="0" step="0.01" value="${line.cubicBuy??line.cubicPerTrip??''}" placeholder="0"
+        title="تكعيب المورد — يؤثر على سعر الشراء فقط"
+        oninput="_SK_LINES[${i}].cubicBuy=Number(this.value);recalcSkLine(${i})"
+        style="min-width:55px;border-bottom:2px solid #1a3a1a"></td>
+      <td class="calc-cell" id="sk-g-${i}">${(line.grossSell??line.grossCubic??0).toFixed(1)}</td>
       <td><input type="number" min="0" value="${line.discountM||''}" placeholder="0" oninput="_SK_LINES[${i}].discountM=this.value;recalcSkLine(${i})" style="min-width:45px;color:#dc2626"></td>
-      <td class="calc-cell text-brand" id="sk-n-${i}">${(line.netCubic||0).toFixed(1)}</td>
+      <td class="calc-cell text-brand" id="sk-n-${i}">${(line.netSell??line.netCubic??0).toFixed(1)}</td>
       <td><input type="number" min="0" value="${line.sellPrice||''}" placeholder="0" oninput="_SK_LINES[${i}].sellPrice=this.value;recalcSkLine(${i})" style="min-width:55px"></td>
       <td><input type="number" min="0" value="${line.buyPrice||''}" placeholder="0" oninput="_SK_LINES[${i}].buyPrice=this.value;recalcSkLine(${i})" style="min-width:55px"></td>
       <td class="calc-cell nowrap text-brand" id="sk-s-${i}">${curr(line.sellTotal)}</td>
@@ -297,7 +305,10 @@ function onSkTruckChange(i,sel){
   const opt=sel.options[sel.selectedIndex];
   if(opt.value){
     _SK_LINES[i].plateNo=opt.dataset.plate||'';
-    _SK_LINES[i].cubicPerTrip=opt.dataset.cubic||'';
+    var cubic=Number(opt.dataset.cubic)||0;
+    _SK_LINES[i].cubicPerTrip=cubic;
+    _SK_LINES[i].cubicSell=cubic;
+    _SK_LINES[i].cubicBuy=cubic;
     _SK_LINES[i].driverName=_SK_LINES[i].driverName||opt.dataset.driver||'';
     _SK_LINES[i].truckId=opt.value;
     recalcSkLine(i);
