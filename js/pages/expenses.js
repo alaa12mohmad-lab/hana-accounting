@@ -4,17 +4,24 @@
 // ── Auto Journal Helper ───────────────────────────────────────────
 function autoJrnEntry({date, desc, amount, debitCode, debitName, creditCode, creditName, entryType, ref}){
   if(!amount || amount<=0) return null;
+  const n = Number(amount);
   const entry = DB.insert('journal',{
-    date: date||todayStr(),
-    description: desc,
-    entryType: entryType||'مصروف',
-    debitCode, debitName,
+    date:         date||todayStr(),
+    description:  desc,
+    entryType:    entryType||'مصروف',
+    // حقل amount للعرض في جدول اليومية
+    amount:       n,
+    // حقول القيد المزدوج
+    debitAmount:  n,
+    creditAmount: n,
+    debitCode,  debitName,
     creditCode, creditName,
-    debitAmount: Number(amount),
-    creditAmount: Number(amount),
-    reference: ref||'',
-    _auto: true,
-    _ref: ref,
+    debitAccount:  debitCode+' '+debitName,
+    creditAccount: creditCode+' '+creditName,
+    reference:    ref||'',
+    party:        desc,
+    paymentType:  'نقدي',
+    _auto:        true,
   });
   return entry;
 }
