@@ -67,9 +67,10 @@
       </div>
       <div id="login-err" class="auth-err"></div>
       <button id="login-btn" onclick="doLogin()" class="btn-auth">🔐 دخول</button>
-      <p style="text-align:center;font-size:10px;color:#94a3b8;margin:12px 0 0">
-        ليس لديك حساب؟ تواصل مع المدير للحصول على دعوة
-      </p>
+      <div style="text-align:center;margin-top:10px;display:flex;justify-content:space-between">
+        <button onclick="resetPassword()" style="background:none;border:none;color:#64748b;font-size:10px;cursor:pointer;font-family:inherit;text-decoration:underline">نسيت كلمة المرور؟</button>
+        <span style="font-size:10px;color:#94a3b8">ليس لديك حساب؟ تواصل مع المدير</span>
+      </div>
 
     </div>
     <!-- Register -->
