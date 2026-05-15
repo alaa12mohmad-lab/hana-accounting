@@ -204,7 +204,11 @@ function openPartnerModal(editId){
   window._prf=rf;
   const v=(k,d='')=>p?.[k]??d;
   openModal(editId?'تعديل شريك':'إضافة شريك',`
-    <div class="form-row fr2 mb10"><div class="form-group"><label><span class="req">*</span>الاسم</label><input id="pr-name" value="${v('name')}"></div><div class="form-group"><label>الهاتف</label><input id="pr-phone" value="${v('phone')}"></div></div>
+    <div class="form-row fr3 mb10">
+  <div class="form-group"><label><span class="req">*</span>الاسم</label><input id="pr-name" value="${v('name')}"></div>
+  <div class="form-group"><label>الهاتف</label><input id="pr-phone" value="${v('phone')}"></div>
+  <div class="form-group"><label>نسبة المشاركة في الأرباح %</label><input type="number" id="pr-share" min="0" max="100" step="0.1" value="${p?.sharePercent||0}" placeholder="مثال: 30"></div>
+</div>
     <div class="divider"></div>
     <div class="flex-between mb8"><div><strong class="text-sm">جدول العمولات</strong><div class="text-xs text-gray">خامة / عمولة م³ / من تاريخ / إلى تاريخ (فارغ=مفتوح)</div></div>
     <button class="btn btn-gray btn-sm" onclick="window._pRates.push({material:'${materials[0]?.name||''}',pricePerCubic:0,from:'${todayStr()}',to:''});window._prf()">＋</button></div>
@@ -216,7 +220,8 @@ function openPartnerModal(editId){
 function savePartner(editId){
   const name=document.getElementById('pr-name')?.value?.trim();
   if(!name)return toast('أدخل الاسم','error');
-  const data={name,phone:document.getElementById('pr-phone')?.value||'',rates:window._pRates||[]};
+  const sharePercent=Number(document.getElementById('pr-share')?.value)||0;
+  const data={name,phone:document.getElementById('pr-phone')?.value||'',sharePercent,rates:window._pRates||[]};
   if(editId){DB.update('partners',editId,data);toast('تم التعديل ✓');}else{DB.insert('partners',data);toast('تمت الإضافة ✓');}
   closeModal();nav('partners');
 }
