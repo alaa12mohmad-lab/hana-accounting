@@ -1,5 +1,7 @@
 // ═══ INCOME STATEMENT ═══
 
+var _IS={from:new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10),to:new Date().toISOString().slice(0,10)};
+
 function renderIncomeStmt(){
   const fd=new Date(_IS.from), td=new Date(_IS.to);
 
