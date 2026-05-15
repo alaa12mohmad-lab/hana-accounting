@@ -202,72 +202,9 @@ function initAuthFlow(){
       const emailLower = user.email.toLowerCase();
       const isAdm      = emailLower === ADMIN_EMAIL.toLowerCase();
 
-      try{
-        // ① هل المستخدم موجود في _users بالفعل؟ (مستخدم قديم — ادخله فوراً)
-        const uRef = firebase.firestore().collection('_users').doc(user.uid);
-        const uDoc = await uRef.get();
-
-        if(uDoc.exists){
-          const role = isAdm ? 'admin' : (uDoc.data().role || 'reviewer');
-          setCurrentUser(user, role);
-          hideAuthScreen();
-          renderUserBadge(user);
-          setConnStatus('connected','متصل ☁️');
-          onDBReady(function(){
-            nav('dashboard');
-            if(typeof initBackupSystem==='function') initBackupSystem();
-          });
-          return;
-        }
-
-        // ② مستخدم جديد — تحقق من الدعوة (الآن المستخدم مصادق ← لا مشكلة في Firestore)
-        var invValid = isAdm;
-
-        if(!invValid){
-          try{
-            const invSnap = await firebase.firestore()
-              .collection('invitations')
-              .where('email','==',emailLower)
-              .get();
-
-            if(!invSnap.empty){
-              invValid = invSnap.docs.some(function(d){
-                var data = d.data();
-                return data.active !== false && !data.revoked;
-              });
-              // وضّح الدعوة كمستخدمة
-              if(invValid){
-                invSnap.docs.forEach(function(d){
-                  if(d.data().active!==false)
-                    d.ref.update({used:true, usedAt:Date.now()}).catch(function(){});
-                });
-              }
-            }
-          }catch(invErr){
-            console.warn('invitation check:', invErr.code, invErr.message);
-          }
-        }
-
-        if(!invValid){
-          // ③ غير مدعو — احذف الحساب من Auth
-          try{ await user.delete(); }catch(de){ console.warn('delete account:', de.code); }
-          showAuthScreen();
-          setTimeout(function(){
-            showAuthErr('reg-err','❌ هذا البريد غير مدعو — تواصل مع المدير');
-          }, 300);
-          return;
-        }
-
-        // ④ مدعو — أضفه إلى _users
-        const newRole = isAdm ? 'admin' : 'reviewer';
-        await uRef.set({
-          email:     emailLower,
-          role:      newRole,
-          createdAt: Date.now(),
-          createdBy: 'self-register',
-        });
-
-        setCurrentUser(user, newRole);
+      // ── Helper: enter the app ──────────────────────────────────────
+      function enterApp(role){
+        setCurrentUser(user, role);
         hideAuthScreen();
         renderUserBadge(user);
         setConnStatus('connected','متصل ☁️');
@@ -275,20 +212,100 @@ function initAuthFlow(){
           nav('dashboard');
           if(typeof initBackupSystem==='function') initBackupSystem();
         });
+      }
+
+      // ── Admin: always allowed ───────────────────────────────────────
+      if(isAdm){ enterApp('admin'); return; }
+
+      try{
+        var uRef = firebase.firestore().collection('_users').doc(user.uid);
+
+        // ① Check _users (existing user)
+        var uDoc;
+        try{
+          uDoc = await uRef.get();
+        }catch(fsErr){
+          // Firestore blocked (ad blocker) — allow in as reviewer
+          console.warn('Firestore blocked, allowing in:', fsErr.code||fsErr.message);
+          enterApp('reviewer');
+          return;
+        }
+
+        if(uDoc.exists){
+          enterApp(uDoc.data().role||'reviewer');
+          return;
+        }
+
+        // ② New user — check invitation
+        var invValid  = false;
+        var netBlocked = false;
+
+        try{
+          var invSnap = await firebase.firestore()
+            .collection('invitations')
+            .where('email','==',emailLower)
+            .get();
+
+          if(!invSnap.empty){
+            invValid = invSnap.docs.some(function(d){
+              var data = d.data();
+              return data.active !== false && !data.revoked;
+            });
+            if(invValid){
+              invSnap.docs.forEach(function(d){
+                if(d.data().active!==false)
+                  d.ref.update({used:true, usedAt:Date.now()}).catch(function(){});
+              });
+            }
+          }
+        }catch(invErr){
+          console.warn('invitation check failed:', invErr.code, invErr.message);
+          // Network blocked — don't delete account, let them retry
+          if(invErr.code==='unavailable'||!invErr.code||invErr.message.indexOf('network')>=0){
+            netBlocked = true;
+          }
+        }
+
+        if(netBlocked){
+          // Can't verify — show retry message
+          await firebase.auth().signOut();
+          showAuthScreen();
+          setTimeout(function(){
+            showAuthErr('reg-err',
+              '⚠️ تعذّر الاتصال بقاعدة البيانات — عطّل مانع الإعلانات وأعد المحاولة');
+          }, 200);
+          return;
+        }
+
+        if(!invValid){
+          // Definitely not invited — delete account
+          try{ await user.delete(); }catch(de){}
+          showAuthScreen();
+          setTimeout(function(){
+            showAuthErr('reg-err','❌ هذا البريد غير مدعو — تواصل مع المدير');
+          }, 200);
+          return;
+        }
+
+        // ③ Invited — add to _users
+        try{
+          await uRef.set({
+            email:     emailLower,
+            role:      'reviewer',
+            createdAt: Date.now(),
+            createdBy: 'self-register',
+          });
+        }catch(writeErr){
+          console.warn('Could not write to _users:', writeErr.code);
+        }
+
+        enterApp('reviewer');
 
       }catch(authErr){
-        console.error('onAuthStateChanged error:', authErr.code, authErr.message);
-        // إذا فشل كل شيء — ادخل المستخدم بصلاحية مراجع
-        if(isAdm){
-          setCurrentUser(user,'admin');
-          hideAuthScreen();
-          renderUserBadge(user);
-          setConnStatus('connected','متصل ☁️');
-          onDBReady(function(){ nav('dashboard'); });
-        } else {
-          showAuthErr('login-err','خطأ في الاتصال — حاول مرة أخرى');
-          firebase.auth().signOut();
-        }
+        console.error('auth flow error:', authErr.code, authErr.message);
+        // Last resort: let admin in, block others
+        showAuthErr('login-err','خطأ غير متوقع — أعد المحاولة');
+        firebase.auth().signOut();
       }
     });
   }catch(e){
