@@ -36,21 +36,44 @@ async function doLogin(){
 
 // ── Invitation Check ─────────────────────────────────────────────
 async function checkInvitation(email){
-  if(email.toLowerCase()===ADMIN_EMAIL) return true;
-  var emailLower = email.toLowerCase();
+  if(!email) return false;
+  var emailLower = email.trim().toLowerCase();
+  // Admin always allowed
+  if(emailLower === ADMIN_EMAIL.toLowerCase()) return true;
+  // If user already logged in and exists in _users — allow
+  var currentUser = firebase.auth().currentUser;
+  if(currentUser && currentUser.email && currentUser.email.toLowerCase()===emailLower){
+    try{
+      var userDoc = await firebase.firestore().collection('_users').doc(currentUser.uid).get();
+      if(userDoc.exists) return true;
+    }catch(e2){}
+  }
   try{
-    // Primary check: active invitations
-    var snap=await firebase.firestore().collection('invitations')
-      .where('email','==',emailLower).where('active','==',true).get();
-    if(!snap.empty) return true;
-    // Fallback: any invitation not explicitly disabled
-    var snap2=await firebase.firestore().collection('invitations')
-      .where('email','==',emailLower).get();
-    return snap2.docs.some(function(d){
-      var data=d.data();
-      return data.active!==false && !data.revoked;
-    });
-  }catch(e){ console.warn('checkInvitation:',e.message); return false; }
+    var snap = await firebase.firestore()
+      .collection('invitations')
+      .where('email','==',emailLower)
+      .get();
+    if(!snap.empty){
+      // Any invitation found = allowed (active check is secondary)
+      var hasValid = snap.docs.some(function(d){
+        var data = d.data();
+        return data.active !== false && !data.revoked;
+      });
+      if(hasValid) return true;
+    }
+    // Also try original case (in case stored differently)
+    var snap2 = await firebase.firestore()
+      .collection('invitations')
+      .where('email','==',email.trim())
+      .get();
+    if(!snap2.empty) return true;
+    return false;
+  }catch(e){
+    console.error('checkInvitation error:', e.code);
+    // On permission error, allow if user is already authenticated
+    if(e.code==='permission-denied' && firebase.auth().currentUser) return true;
+    return false;
+  }
 }
 
 // ── Register ─────────────────────────────────────────────────────
@@ -134,26 +157,24 @@ function applyReviewerMode(){
 
 // ── Ensure user is in _users (creates if missing) ────────────────
 async function ensureUserInDB(user){
-  const isAdm = user.email.toLowerCase() === ADMIN_EMAIL;
+  const isAdm = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const defaultRole = isAdm ? 'admin' : 'reviewer';
   try{
-    const doc = await firebase.firestore().collection('_users').doc(user.uid).get();
+    const ref = firebase.firestore().collection('_users').doc(user.uid);
+    const doc = await ref.get();
     if(!doc.exists){
-      // Create entry
-      await firebase.firestore().collection('_users').doc(user.uid).set({
-        email: user.email,
-        role: defaultRole,
+      await ref.set({
+        email:     user.email.toLowerCase(),
+        role:      defaultRole,
         createdAt: Date.now(),
         createdBy: 'auto',
       });
       return defaultRole;
     }
-    const data = doc.data();
-    // If admin email, always return admin
     if(isAdm) return 'admin';
-    return data.role || 'reviewer';
+    return doc.data().role || 'reviewer';
   }catch(e){
-    console.warn('ensureUserInDB error:', e);
+    console.warn('ensureUserInDB:', e.code, e.message);
     return defaultRole;
   }
 }
@@ -162,7 +183,6 @@ async function ensureUserInDB(user){
 function initAuthFlow(){
   const fbCfg=getFBConfig();
   if(!fbCfg?.apiKey){
-    // No Firebase config — show setup screen
     showSetupScreen();
     return;
   }
