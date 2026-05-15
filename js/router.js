@@ -287,24 +287,37 @@ function calcSarkiTotals(lines){
 // ── Excel Date → yyyy-MM-dd ──────────────────────────────────
 function excelDateToStr(val){
   if(!val) return '';
-  if(typeof val === 'string' && val.match(/^\d{4}-\d{2}-\d{2}$/)) return val;
-  // Excel serial number
+  if(typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  // Excel serial number — convert using LOCAL time (not UTC) to avoid timezone shift
   if(typeof val === 'number' || (typeof val === 'string' && !isNaN(val))){
     var n = Number(val);
-    if(n > 1000 && n < 100000){
-      // Excel serial: days since 1900-01-01 (with 1900 bug)
-      var d = new Date(Date.UTC(1900,0,1) + (n-2)*86400000);
-      return d.toISOString().slice(0,10);
-    }
-    // Unix timestamp in ms
-    if(n > 1000000000000){
-      return new Date(n).toISOString().slice(0,10);
+    if(n > 1000 && n < 200000){
+      // Convert Excel serial to JS timestamp (UTC)
+      var utcMs = Math.round((n - 25569) * 86400 * 1000);
+      // Add local timezone offset to get local date
+      var localMs = utcMs + (new Date().getTimezoneOffset() * -60000);
+      var d = new Date(localMs);
+      var y = d.getUTCFullYear();
+      var m = String(d.getUTCMonth()+1).padStart(2,'0');
+      var day = String(d.getUTCDate()).padStart(2,'0');
+      return y+'-'+m+'-'+day;
     }
   }
-  // Try parse as date string
+  // Date object
+  if(val instanceof Date){
+    var y2 = val.getFullYear();
+    var m2 = String(val.getMonth()+1).padStart(2,'0');
+    var d2 = String(val.getDate()).padStart(2,'0');
+    return y2+'-'+m2+'-'+d2;
+  }
+  // Try parse as string
   try{
-    var d2 = new Date(val);
-    if(!isNaN(d2)) return d2.toISOString().slice(0,10);
+    var parsed = new Date(val);
+    if(!isNaN(parsed)){
+      return parsed.getFullYear()+'-'
+        +String(parsed.getMonth()+1).padStart(2,'0')+'-'
+        +String(parsed.getDate()).padStart(2,'0');
+    }
   }catch(e){}
   return '';
 }
