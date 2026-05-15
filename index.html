@@ -389,13 +389,35 @@ function closeMobSidebar(){
   document.body.style.overflow='';
 }
 function toggleSidebarMobile(){
-  var open=document.getElementById('sidebar').classList.contains('mob-open');
-  if(window.innerWidth<=768){ open?closeMobSidebar():openMobSidebar(); }
-  else{
-    document.getElementById('sidebar').classList.toggle('closed');
-    document.getElementById('main').classList.toggle('full');
+  var sb   = document.getElementById('sidebar');
+  var main = document.getElementById('main');
+  if(window.innerWidth <= 768){
+    // Mobile: drawer behavior
+    var open = sb.classList.contains('mob-open');
+    open ? closeMobSidebar() : openMobSidebar();
+  } else {
+    // Desktop: shrink/expand
+    var closed = sb.classList.contains('closed');
+    if(closed){
+      sb.classList.remove('closed');
+      main.classList.remove('full');
+      localStorage.setItem('hana_sidebar','open');
+    } else {
+      sb.classList.add('closed');
+      main.classList.add('full');
+      localStorage.setItem('hana_sidebar','closed');
+    }
   }
 }
+
+// Restore sidebar state on load
+document.addEventListener('DOMContentLoaded', function(){
+  var state = localStorage.getItem('hana_sidebar');
+  if(state === 'closed' && window.innerWidth > 768){
+    document.getElementById('sidebar')?.classList.add('closed');
+    document.getElementById('main')?.classList.add('full');
+  }
+});
 function initMobileSidebar(){
   document.querySelectorAll('.sb-link').forEach(function(el){
     el.addEventListener('click',function(){
@@ -715,6 +737,57 @@ window.handleSarkiExcelFile = function(file){
   };
   reader.readAsBinaryString(file);
 };
+</script>
+
+
+<script>
+/* ══ Override buildSkThead to ensure رقم is sortable ═══════════ */
+function buildSkThead(){
+  var cols = [
+    {key:'id',          label:'رقم'},
+    {key:'date',        label:'التاريخ'},
+    {key:'client',      label:'العميل'},
+    {key:'supplier',    label:'المورد'},
+    {key:'material',    label:'الخامة'},
+    {key:'netM3',       label:'م³ صافي'},
+    {key:'totalSell',   label:'المبيعات'},
+    {key:'totalBuy',    label:'التكلفة'},
+    {key:'totalProfit', label:'الربح'},
+    {key:'status',      label:'الحالة'},
+    {key:null,          label:'إجراء'},
+  ];
+  var sf  = window._SF || {};
+  var out = '<tr>';
+  cols.forEach(function(c){
+    if(!c.key){
+      out += '<th style="padding:6px 4px">'+c.label+'</th>';
+    } else {
+      var active = sf.sortKey === c.key;
+      var arrow  = active ? (sf.sortDir===-1 ? ' ▼' : ' ▲') : ' ⇅';
+      out += '<th data-skey="'+c.key+'" onclick="sortSarkiBy(this.dataset.skey)" style="'
+        + 'padding:6px 4px;cursor:pointer;user-select:none;white-space:nowrap;'
+        + (active ? 'background:rgba(255,255,255,.2);' : '')
+        + '">'
+        + c.label
+        + '<span style="font-size:8px;margin-right:3px">'+arrow+'</span>'
+        + '</th>';
+    }
+  });
+  out += '</tr>';
+  return out;
+}
+
+function sortSarkiBy(key){
+  if(!key) return;
+  if(!window._SF) window._SF = {client:'كل العملاء',status:'كل الحالات',sortKey:'date',sortDir:-1};
+  if(window._SF.sortKey===key){
+    window._SF.sortDir = -window._SF.sortDir;
+  } else {
+    window._SF.sortKey = key;
+    window._SF.sortDir = -1;
+  }
+  if(typeof nav==='function') nav('sarkis');
+}
 </script>
 
 </body>
