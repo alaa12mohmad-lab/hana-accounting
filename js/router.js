@@ -247,21 +247,38 @@ function initMobileSidebar(){
 
 // ── Sarkis Calculation Helpers (shared) ──────────────────────
 function calcLine(l){
-  var trips        = Number(l.trips)        || 0;
-  var cubicPerTrip = Number(l.cubicPerTrip) || 0;
-  var discountM    = Number(l.discountM)    || 0;
-  var sellPrice    = Number(l.sellPrice)    || 0;
-  var buyPrice     = Number(l.buyPrice)     || 0;
-  var grossCubic   = trips * cubicPerTrip;
-  var netCubic     = Math.max(0, grossCubic - discountM);
+  var trips     = Number(l.trips)     || 0;
+  var discountM = Number(l.discountM) || 0;
+  var sellPrice = Number(l.sellPrice) || 0;
+  var buyPrice  = Number(l.buyPrice)  || 0;
+
+  // التكعيب المنفصل: م³عميل و م³مورد
+  // إذا لم يكن محدداً يستخدم cubicPerTrip كافتراضي
+  var cubicSell = (l.cubicSell != null && l.cubicSell !== '')
+    ? Number(l.cubicSell)
+    : (Number(l.cubicPerTrip) || 0);
+  var cubicBuy  = (l.cubicBuy  != null && l.cubicBuy  !== '')
+    ? Number(l.cubicBuy)
+    : (Number(l.cubicPerTrip) || 0);
+
+  var grossSell = trips * cubicSell;
+  var grossBuy  = trips * cubicBuy;
+  var netSell   = Math.max(0, grossSell - discountM);
+  var netBuy    = Math.max(0, grossBuy  - discountM);
+
   return Object.assign({}, l, {
-    grossCubic: parseFloat(grossCubic.toFixed(3)),
-    netCubic:   parseFloat(netCubic.toFixed(3)),
-    sellTotal:  parseFloat((netCubic * sellPrice).toFixed(2)),
-    buyTotal:   parseFloat((netCubic * buyPrice).toFixed(2)),
-    profit:     parseFloat((netCubic * (sellPrice - buyPrice)).toFixed(2)),
+    grossCubic: parseFloat(grossSell.toFixed(3)),  // للعرض (عميل)
+    grossSell:  parseFloat(grossSell.toFixed(3)),
+    grossBuy:   parseFloat(grossBuy.toFixed(3)),
+    netCubic:   parseFloat(netSell.toFixed(3)),    // للعرض (عميل)
+    netSell:    parseFloat(netSell.toFixed(3)),
+    netBuy:     parseFloat(netBuy.toFixed(3)),
+    sellTotal:  parseFloat((netSell * sellPrice).toFixed(2)),
+    buyTotal:   parseFloat((netBuy  * buyPrice).toFixed(2)),
+    profit:     parseFloat((netSell * sellPrice - netBuy * buyPrice).toFixed(2)),
   });
 }
+
 
 function calcSarkiTotals(lines){
   var r = {totalGross:0,totalNet:0,totalSell:0,totalBuy:0,totalProfit:0,totalTrips:0};
