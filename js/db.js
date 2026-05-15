@@ -34,7 +34,27 @@ function initFirestoreDB(db){
         if(!_cache.customers.length&&!_cache.materials.length) _seed();
       }
       if(_dbReady) _refreshPage();
-    },err=>{done++;if(done>=COLLECTIONS.length&&!_dbReady) _markReady();});
+    },err=>{
+      done++;
+      console.warn('Firestore listener error:', err.code, err.message);
+      if(done>=COLLECTIONS.length&&!_dbReady){
+        _markReady();
+        // Show warning if blocked
+        if(err.code==='permission-denied'||err.code==='unavailable'||!err.code){
+          setTimeout(function(){
+            var warn=document.createElement('div');
+            warn.id='fs-warn';
+            warn.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);'
+              +'background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:10px 16px;'
+              +'border-radius:8px;z-index:9999;font-size:11px;font-family:Tahoma;text-align:center;direction:rtl';
+            warn.innerHTML='⚠️ Firestore محجوب — عطّل مانع الإعلانات (Ad Blocker / Brave Shields) للعمل بشكل كامل'
+              +'<button onclick="this.parentElement.remove()" style="margin-right:10px;background:none;border:none;cursor:pointer;font-size:14px">×</button>';
+            if(!document.getElementById('fs-warn'))
+              document.body.appendChild(warn);
+          },3000);
+        }
+      }
+    });
   });
   _db.collection("_cfg").doc("company").onSnapshot(doc=>{if(doc.exists)_company=doc.data();});
 }
