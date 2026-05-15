@@ -6,13 +6,183 @@ function renderStmtHistory(){
 }
 
 function renderRunningBal(){
-  return '<div class="card"><div class="section-title">📊 كشف الحساب المتحرك</div>'
-    +'<p class="text-gray text-xs mt8">اذهب إلى: مستخلص العميل ← اختر العميل ← كشف الحساب</p></div>';
+  var customers = DB.getAll('customers').map(function(c){ return c.name; });
+  var sel = window._RB_CLIENT || '';
+  var from = window._RB_FROM || '';
+  var to   = window._RB_TO   || '';
+
+  var custOpts = ['<option value="">— اختر العميل —</option>']
+    .concat(customers.map(function(c){
+      return '<option value="'+c+'"'+(c===sel?' selected':'')+'>'+c+'</option>';
+    })).join('');
+
+  var rows = [];
+  var runBal = 0;
+
+  if(sel){
+    var cust = DB.getAll('customers').find(function(c){ return c.name===sel; });
+    var ob = Number(cust?.openingBalance)||0;
+    runBal = ob;
+
+    // Collect all transactions
+    var txns = [];
+
+    // Opening balance
+    if(ob!==0) txns.push({date:'0000-00-00', type:'رصيد أول المدة', desc:'رصيد افتتاحي', debit:ob>0?ob:0, credit:ob<0?Math.abs(ob):0});
+
+    // Sarkis (invoices)
+    DB.getAll('sarkis').filter(function(sk){
+      return sk.client===sel && sk.status!=='ملغي'
+        && (!from||sk.date>=from) && (!to||sk.date<=to);
+    }).forEach(function(sk){
+      txns.push({date:sk.date, type:'فاتورة', desc:'حافظة #'+sk.id+' — '+sk.material, debit:Number(sk.totalSell)||0, credit:0, ref:'#'+sk.id});
+    });
+
+    // Collections
+    DB.getAll('journal').filter(function(j){
+      return j.entryType==='تحصيل' && j.party===sel
+        && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
+    }).forEach(function(j){
+      txns.push({date:j.date, type:'تحصيل', desc:j.description||'تحصيل نقدي', debit:0, credit:Number(j.amount)||0});
+    });
+
+    // Sort by date
+    txns.sort(function(a,b){ return a.date.localeCompare(b.date); });
+
+    // Calculate running balance
+    rows = txns.map(function(t){
+      runBal += t.debit - t.credit;
+      return Object.assign({},t,{balance:runBal});
+    });
+  }
+
+  var totalDebit  = rows.reduce(function(s,r){ return s+r.debit; },0);
+  var totalCredit = rows.reduce(function(s,r){ return s+r.credit; },0);
+  var finalBal    = rows.length ? rows[rows.length-1].balance : 0;
+
+  return '<div>'
+    +'<div class="page-header">'
+    +'<div class="section-title" style="margin:0">📊 كشف الحساب المتحرك</div>'
+    +'</div>'
+    +'<div class="card mb12" style="padding:10px 14px">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
+    +'<div class="form-group" style="margin:0;min-width:200px"><label style="font-size:10px">العميل</label>'
+    +'<select data-pg="running-bal" onchange="window._RB_CLIENT=this.value;nav(this.dataset.pg)" style="width:100%">'+custOpts+'</select></div>'
+    +'<div class="form-group" style="margin:0"><label style="font-size:10px">من</label>'
+    +'<input type="date" value="'+from+'" data-pg="running-bal" onchange="window._RB_FROM=this.value;nav(this.dataset.pg)"></div>'
+    +'<div class="form-group" style="margin:0"><label style="font-size:10px">إلى</label>'
+    +'<input type="date" value="'+to+'" data-pg="running-bal" onchange="window._RB_TO=this.value;nav(this.dataset.pg)"></div>'
+    +'<button class="btn btn-gray btn-sm" data-pg="running-bal" onclick="window._RB_CLIENT=\'\';window._RB_FROM=\'\';window._RB_TO=\'\';nav(this.dataset.pg)">✕ مسح</button>'
+    +'<button class="btn btn-gray btn-sm" onclick="printRunningBal()">🖨️ طباعة</button>'
+    +'</div></div>'
+
+    +(sel && rows.length===0 ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">📭</div><p class="text-gray mt8">لا توجد حركات لهذا العميل</p></div>'
+    : !sel ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">👆</div><p class="text-gray mt8">اختر العميل لعرض كشف الحساب</p></div>'
+    : '<div id="rb-table"><div class="tbl-wrap"><table>'
+    +'<thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>'
+    +'<tbody>'
+    +rows.map(function(r){
+      return '<tr>'
+        +'<td class="text-xs">'+fmtDate(r.date)+'</td>'
+        +'<td>'+statusBadge(r.type)+'</td>'
+        +'<td class="text-xs">'+r.desc+(r.ref?'  <span style="color:#1F4E78;font-size:9px">'+r.ref+'</span>':'')+'</td>'
+        +'<td class="tabular text-red">'+(r.debit>0?curr(r.debit):'—')+'</td>'
+        +'<td class="tabular text-green">'+(r.credit>0?curr(r.credit):'—')+'</td>'
+        +'<td class="tabular font-bold" style="color:'+(r.balance>=0?'#dc2626':'#16a34a')+'">'+curr(Math.abs(r.balance))+(r.balance>=0?' (مدين)':' (دائن)')+'</td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody>'
+    +'<tfoot><tr>'
+    +'<td colspan="3" class="font-bold">الإجمالي</td>'
+    +'<td class="tabular font-bold text-red">'+curr(totalDebit)+'</td>'
+    +'<td class="tabular font-bold text-green">'+curr(totalCredit)+'</td>'
+    +'<td class="tabular font-bold" style="color:'+(finalBal>=0?'#dc2626':'#16a34a')+'">'+curr(Math.abs(finalBal))+(finalBal>=0?' (مدين)':' (دائن)')+'</td>'
+    +'</tr></tfoot>'
+    +'</table></div></div>')
+    +'</div>';
+}
+
+function printRunningBal(){
+  var tbl = document.getElementById('rb-table');
+  if(!tbl){ toast('اختر العميل أولاً','error'); return; }
+  _pw('كشف الحساب المتحرك — '+(window._RB_CLIENT||''), printHeaderHTML()+tbl.innerHTML);
 }
 
 function renderNotes(){
-  return '<div class="card"><div class="section-title">📝 إشعارات المديونية</div>'
-    +'<p class="text-gray text-xs mt8">الإشعارات متاحة من صفحة المستخلصات</p></div>';
+  var customers = DB.getAll('customers');
+  var threshold = Number(window._NT_THRESH)||0;
+
+  // Calc balances for all customers
+  var debtors = customers.map(function(c){
+    var ob    = Number(c.openingBalance)||0;
+    var sells = DB.getAll('sarkis').filter(function(s){ return s.client===c.name&&s.status!=='ملغي'; })
+                  .reduce(function(t,s){ return t+(Number(s.totalSell)||0); },0);
+    var colls = DB.getAll('journal').filter(function(j){ return j.entryType==='تحصيل'&&j.party===c.name; })
+                  .reduce(function(t,j){ return t+(Number(j.amount)||0); },0);
+    var bal = ob+sells-colls;
+    return {name:c.name, phone:c.phone||'', balance:bal, sells:sells, colls:colls};
+  }).filter(function(c){ return c.balance>threshold; })
+    .sort(function(a,b){ return b.balance-a.balance; });
+
+  var total = debtors.reduce(function(s,c){ return s+c.balance; },0);
+
+  return '<div>'
+    +'<div class="page-header">'
+    +'<div class="section-title" style="margin:0">📋 إشعارات المديونية والداينية</div>'
+    +'</div>'
+    +'<div class="card mb12" style="padding:10px 14px">'
+    +'<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">'
+    +'<div class="form-group" style="margin:0"><label style="font-size:10px">عرض الأرصدة أعلى من</label>'
+    +'<input type="number" min="0" step="100" value="'+threshold+'" data-pg="notes" onchange="window._NT_THRESH=this.value;nav(this.dataset.pg)" style="width:130px"></div>'
+    +'<button class="btn btn-gray btn-sm" onclick="printNotes()">🖨️ طباعة الكل</button>'
+    +'</div></div>'
+    +'<div class="alert alert-blue mb12" style="font-size:11px">'
+    +'<span>📊</span><div>إجمالي المديونية: <strong>'+curr(total)+'</strong> — '
+    +debtors.length+' عميل لديهم أرصدة مدينة</div></div>'
+    +'<div class="tbl-wrap"><table id="notes-table">'
+    +'<thead><tr><th>م</th><th>العميل</th><th>الهاتف</th><th>إجمالي المبيعات</th><th>إجمالي التحصيل</th><th>الرصيد المدين</th><th>إجراء</th></tr></thead>'
+    +'<tbody>'
+    +(debtors.length===0
+      ? '<tr><td colspan="7" class="tbl-empty"><span class="tbl-empty-icon">✅</span>لا توجد مديونيات بهذا الشرط</td></tr>'
+      : debtors.map(function(c,i){
+          return '<tr>'
+            +'<td>'+(i+1)+'</td>'
+            +'<td class="font-bold">'+c.name+'</td>'
+            +'<td class="text-xs" dir="ltr">'+( c.phone||'—')+'</td>'
+            +'<td class="tabular text-red">'+curr(c.sells)+'</td>'
+            +'<td class="tabular text-green">'+curr(c.colls)+'</td>'
+            +'<td class="tabular font-bold" style="color:#dc2626;font-size:14px">'+curr(c.balance)+'</td>'
+            +'<td><button class="btn btn-xs" style="background:#1F4E78;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit" '
+            +'data-name="'+c.name+'" data-bal="'+c.balance+'" onclick="printSingleNote(this.dataset.name,this.dataset.bal)">🖨️ إشعار</button></td>'
+            +'</tr>';
+        }).join(''))
+    +'</tbody></table></div>'
+    +'</div>';
+}
+
+function printNotes(){
+  var tbl = document.getElementById('notes-table');
+  if(!tbl) return;
+  var clone = tbl.cloneNode(true);
+  clone.querySelectorAll('th:last-child,td:last-child').forEach(function(el){ el.remove(); });
+  _pw('إشعارات المديونية', printHeaderHTML()+clone.outerHTML);
+}
+
+function printSingleNote(name, balance){
+  var co = DB.getCompany();
+  var html = printHeaderHTML()
+    +'<div style="text-align:center;margin:20px 0;padding:20px;border:2px solid #1F4E78;border-radius:8px">'
+    +'<div style="font-size:14px;font-weight:700;color:#1F4E78;margin-bottom:10px">إشعار بالرصيد المدين</div>'
+    +'<div style="font-size:12px;margin-bottom:8px">السادة / <strong>'+name+'</strong></div>'
+    +'<div style="font-size:11px;color:#666;margin-bottom:16px">تحية طيبة وبعد،</div>'
+    +'<div style="font-size:11px;margin-bottom:16px">نفيدكم بأن رصيدكم المدين لدينا حتى تاريخ '+fmtDate(Date.now())+' هو:</div>'
+    +'<div style="font-size:24px;font-weight:700;color:#dc2626;margin:16px 0">'+curr(Number(balance))+'</div>'
+    +'<div style="font-size:11px;color:#666">نرجو التكرم بالسداد في أقرب وقت ممكن</div>'
+    +'</div>'
+    +'<div style="margin-top:40px;display:flex;justify-content:space-between;font-size:10px">'
+    +'<div>توقيع المحاسب: ________________</div>'
+    +'<div>ختم الشركة</div></div>';
+  _pw('إشعار مديونية — '+name, html);
 }
 // ═══════════════════════════════════════════════════════════════════
 // DETAILED QUANTITY STATEMENTS — كشف كميات تفصيلي
