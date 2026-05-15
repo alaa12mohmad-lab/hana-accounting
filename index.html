@@ -664,61 +664,55 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
 <script>
-/* ══ Excel Import Modal — always available ════════════════════ */
+/* ══ Excel Import ══════════════════════════════════════════════ */
 window.importSarkiExcel = function(){
-  // Try excel.js version first
-  if(typeof openSarkiImportModal==='function' && openSarkiImportModal !== window.importSarkiExcel){
+  if(typeof openSarkiImportModal==='function'){
     openSarkiImportModal(); return;
   }
-  // Fallback: inline modal
   if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
-  openModal('📥 استيراد حوافظ من Excel',
-    '<div class="alert alert-blue mb12" style="font-size:11px"><span>📋</span>'
-    +'<div><strong>الخطوات:</strong><br>'
-    +'1. نزّل قالب Excel أولاً<br>'
-    +'2. أدخل البيانات<br>'
-    +'3. ارفع الملف هنا</div></div>'
-    +'<div style="text-align:center;padding:16px">'
-    +'<button class="btn btn-gray btn-sm" onclick="if(typeof downloadSarkiTemplate==='function')downloadSarkiTemplate();else toast('قيد التطوير')">📥 تنزيل القالب</button>'
+  var modalBody = '<div class="alert alert-blue mb12" style="font-size:11px"><span>📋</span>'
+    +'<div><strong>الخطوات:</strong><br>1. نزّل القالب<br>2. أدخل البيانات<br>3. ارفع الملف</div></div>'
+    +'<div style="text-align:center;padding:10px">'
+    +'<button class="btn btn-gray btn-sm" onclick="if(typeof downloadSarkiTemplate===\'function\')downloadSarkiTemplate()">📥 تنزيل القالب</button>'
     +'</div>'
-    +'<div id="excel-drop-zone" style="border:2px dashed #e2e8f0;border-radius:10px;padding:30px;text-align:center;cursor:pointer;background:#f8fafc"'
-    +' onclick="document.getElementById('sk-excel-inp').click()">'
+    +'<div id="excel-drop-zone" style="border:2px dashed #e2e8f0;border-radius:10px;padding:30px;text-align:center;cursor:pointer;background:#f8fafc" onclick="triggerExcelPick()">'
     +'<div style="font-size:28px;margin-bottom:8px">📂</div>'
     +'<div style="font-size:13px;font-weight:600;color:#374151">اضغط لاختيار ملف Excel</div>'
     +'<div class="text-xs text-gray mt4">يدعم .xlsx و .xls</div>'
-    +'<input type="file" id="sk-excel-inp" accept=".xlsx,.xls" style="display:none"'
-    +' onchange="handleSarkiExcelFile(this.files[0])">'
+    +'<input type="file" id="sk-excel-inp" accept=".xlsx,.xls" style="display:none" onchange="handleSarkiExcelFile(this.files[0])">'
     +'</div>'
-    +'<div id="sk-import-status" style="margin-top:10px"></div>',
+    +'<div id="sk-import-status" style="margin-top:10px"></div>';
+  openModal('📥 استيراد حوافظ من Excel', modalBody,
     '<button class="btn btn-gray" onclick="closeModal()">إغلاق</button>'
-    +'<button class="btn btn-primary" id="sk-import-btn" onclick="if(typeof importSarkisFromExcel==='function')importSarkisFromExcel();" style="display:none">✅ استيراد البيانات</button>',
+    +'<button class="btn btn-primary" id="sk-import-btn" onclick="if(typeof importSarkisFromExcel===\'function\')importSarkisFromExcel();" style="display:none">✅ استيراد البيانات</button>',
     'modal-md');
+};
+
+window.triggerExcelPick = function(){
+  var inp = document.getElementById('sk-excel-inp');
+  if(inp) inp.click();
 };
 
 window.handleSarkiExcelFile = function(file){
   if(!file) return;
-  if(typeof parseExcelFile==='function'){
-    parseExcelFile(file);
-  } else {
-    // Basic inline parser
-    var reader = new FileReader();
-    reader.onload = function(e){
-      try{
-        var wb   = XLSX.read(e.target.result, {type:'binary',cellDates:true,dateNF:'yyyy-mm-dd'});
-        var ws   = wb.Sheets[wb.SheetNames[0]];
-        var rows = XLSX.utils.sheet_to_json(ws, {raw:false,dateNF:'yyyy-mm-dd'});
-        var st   = document.getElementById('sk-import-status');
-        var btn  = document.getElementById('sk-import-btn');
-        if(st) st.innerHTML='<div class="alert alert-green" style="font-size:11px"><span>✅</span><span>تم قراءة '+rows.length+' سطر</span></div>';
-        if(btn) btn.style.display='';
-        window._xlsxPreview = rows;
-      }catch(err){
-        var st=document.getElementById('sk-import-status');
-        if(st) st.innerHTML='<div class="alert alert-red" style="font-size:11px"><span>❌</span><span>'+err.message+'</span></div>';
-      }
-    };
-    reader.readAsBinaryString(file);
-  }
+  if(typeof parseExcelFile==='function'){ parseExcelFile(file); return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'binary',cellDates:true,dateNF:'yyyy-mm-dd'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{raw:false,dateNF:'yyyy-mm-dd'});
+      var st=document.getElementById('sk-import-status');
+      var btn=document.getElementById('sk-import-btn');
+      if(st) st.innerHTML='<div class="alert alert-green" style="font-size:11px"><span>✅</span><span>تم قراءة '+rows.length+' سطر</span></div>';
+      if(btn) btn.style.display='';
+      window._xlsxPreview=rows;
+    }catch(err){
+      var st2=document.getElementById('sk-import-status');
+      if(st2) st2.innerHTML='<div class="alert alert-red" style="font-size:11px"><span>❌</span><span>'+err.message+'</span></div>';
+    }
+  };
+  reader.readAsBinaryString(file);
 };
 </script>
 
