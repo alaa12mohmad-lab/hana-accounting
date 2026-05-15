@@ -30,9 +30,9 @@ function renderJournal(){
         ${filtered.map((j,idx)=>`<tr style="${j.entryType==='تحصيل'?'border-right:3px solid #10b981':j.entryType==='دفع'?'border-right:3px solid #ef4444':''}">
           <td class="text-gray text-xs">${filtered.length-idx}</td>
           <td>${fmtDate(j.date)}</td>
-          <td>${statusBadge(j.entryType)}</td>
+          <td>${statusBadge(j.entryType)}${j._auto?'<span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:1px 5px;margin-right:3px">🤖</span>':''}</td>
           <td><strong>${j.party||'—'}</strong>${j.partyType?`<br><span class="text-xs text-gray">${j.partyType}</span>`:''}</td>
-          <td class="tabular font-bold ${j.entryType==='تحصيل'?'text-green':j.entryType==='دفع'?'text-red':'text-brand'}">${j.entryType==='يدوي'?curr(j.debitAmount||0):curr(j.amount)}</td>
+          <td class="tabular font-bold ${j.entryType==='تحصيل'?'text-green':j.entryType==='دفع'?'text-red':'text-brand'}">${curr(j.amount||j.debitAmount||0)}</td>
           <td class="text-xs text-gray">${j.debitCode?j.debitCode+' '+j.debitName:j.debitAccount||'—'}</td>
           <td class="text-xs text-gray">${j.creditCode?j.creditCode+' '+j.creditName:j.creditAccount||'—'}</td>
           <td>${j.paymentType?badge(j.paymentType,'blue'):'—'}</td>
