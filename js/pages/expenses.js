@@ -1,256 +1,391 @@
-// ═══ EXPENSES & FUEL ═══
+// ═══ EXPENSES, SALARIES & AUTO-JOURNAL ═══════════════════════════
+// كل عملية مالية تُقيَّد تلقائياً في دفتر اليومية
 
-function renderExpenses(){
-  const expenses=DB.getAll('expenses').sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const trucks=DB.getAll('trucks');
-  const cats=['الكل',...EXP_CATS];
-
-  // Apply filters
-  const filtered=expenses.filter(e=>{
-    if(_EXP_FILTER.cat!=='الكل'&&e.category!==_EXP_FILTER.cat) return false;
-    if(_EXP_FILTER.truck&&e.truckId&&e.truckId!==_EXP_FILTER.truck) return false;
-    if(_EXP_FILTER.from&&e.date<_EXP_FILTER.from) return false;
-    if(_EXP_FILTER.to&&e.date>_EXP_FILTER.to) return false;
-    return true;
+// ── Auto Journal Helper ───────────────────────────────────────────
+function autoJrnEntry({date, desc, amount, debitCode, debitName, creditCode, creditName, entryType, ref}){
+  if(!amount || amount<=0) return null;
+  const entry = DB.insert('journal',{
+    date: date||todayStr(),
+    description: desc,
+    entryType: entryType||'مصروف',
+    debitCode, debitName,
+    creditCode, creditName,
+    debitAmount: Number(amount),
+    creditAmount: Number(amount),
+    reference: ref||'',
+    _auto: true,
+    _ref: ref,
   });
+  return entry;
+}
 
-  const total=filtered.reduce((s,e)=>s+(Number(e.amount)||0),0);
+// Payment type → credit account
+function payAcct(pt){
+  if(!pt||pt==='نقدي'||pt==='كاش') return {code:'1001',name:'الصندوق'};
+  if(pt==='شيك آجل'||pt==='شيك فوري') return {code:'1002',name:'البنك'};
+  return {code:'1002',name:'البنك'};
+}
 
-  // Category summary for filtered
-  const catSummary={};
-  filtered.forEach(e=>{ catSummary[e.category]=(catSummary[e.category]||0)+(Number(e.amount)||0); });
-
-  const topCat=Object.entries(catSummary).sort((a,b)=>b[1]-a[1]);
-
-  const catColors={
-    'وقود':'orange',
-    'صيانة وإصلاح':'red',
-    'رواتب وأجور':'purple',
-    'إيجار':'blue',
-    'مرافق (ماء/كهرباء/تلفون)':'teal',
-    'تأمين':'green',
-    'رسوم حكومية':'gray',
-    'مصاريف إدارية':'yellow',
-    'أخرى':'gray',
-  };
-
+// ── Main Render ───────────────────────────────────────────────────
+function renderExpenses(){
+  const tab = window._EXP_TAB||'expenses';
   return `<div>
     <div class="page-header">
-      <div class="flex-wrap">
-        <button class="btn btn-primary" onclick="openExpModal()">＋ إضافة مصروف</button>
-        <button class="btn btn-orange btn-sm" onclick="openExpModal('وقود')">⛽ تعبئة وقود</button>
-        <button class="btn btn-red btn-sm" onclick="openExpModal('صيانة وإصلاح')">🔧 صيانة</button>
-        <button class="btn btn-purple btn-sm" style="background:#7c3aed" onclick="openExpModal('رواتب وأجور')">👷 راتب</button>
-      </div>
+      <div class="section-title" style="margin:0">💸 المصروفات والرواتب</div>
     </div>
-
-    <!-- Filters -->
-    <div class="card mb12">
-      <div class="form-row fr4">
-        <div class="form-group"><label>الفئة</label>
-          <select onchange="_EXP_FILTER.cat=this.value;nav('expenses')">
-            ${cats.map(c=>`<option ${_EXP_FILTER.cat===c?'selected':''}>${c}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>السيارة</label>
-          <select onchange="_EXP_FILTER.truck=this.value;nav('expenses')">
-            <option value="">كل السيارات</option>
-            ${trucks.map(t=>`<option value="${t.id}" ${_EXP_FILTER.truck===t.id?'selected':''}>${t.plateNo}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group"><label>من تاريخ</label>
-          <input type="date" value="${_EXP_FILTER.from}" onchange="_EXP_FILTER.from=this.value;nav('expenses')">
-        </div>
-        <div class="form-group"><label>إلى تاريخ</label>
-          <input type="date" value="${_EXP_FILTER.to}" onchange="_EXP_FILTER.to=this.value;nav('expenses')">
-        </div>
-      </div>
-      <div class="flex" style="margin-top:6px">
-        <button class="btn btn-gray btn-sm" onclick="_EXP_FILTER={cat:'الكل',from:'',to:'',truck:''};nav('expenses')">✕ مسح الفلاتر</button>
-        <span class="text-xs text-gray" style="margin-right:8px">${filtered.length} مصروف — إجمالي: <strong class="text-red">${curr(total)}</strong></span>
-      </div>
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
+      ${[['expenses','💸 المصروفات'],['salaries','👷 الرواتب والأجور'],['partners','🤝 مستحقات الشركاء']].map(([k,l])=>`
+        <button onclick="window._EXP_TAB='${k}';nav('expenses')" style="
+          padding:10px 18px;border:none;background:none;cursor:pointer;
+          font-family:inherit;font-size:12px;font-weight:600;
+          color:${tab===k?'#1F4E78':'#64748b'};
+          border-bottom:${tab===k?'3px solid #1F4E78':'3px solid transparent'};
+          margin-bottom:-2px">${l}</button>`).join('')}
     </div>
+    <div id="exp-tab-content">
+      ${tab==='expenses' ? renderExpTab() : tab==='salaries' ? renderSalTab() : renderPartnersTab()}
+    </div>
+  </div>`;
+}
 
-    <!-- Category breakdown -->
-    ${topCat.length>0?`
-    <div class="grid4 mb12">
-      ${topCat.slice(0,4).map(([cat,amt])=>`
-        <div class="card-sm">
-          <div class="text-xs text-gray mb4">${cat}</div>
-          <div class="font-bold text-red tabular">${curr(amt)}</div>
-          <div style="height:4px;background:#f1f5f9;border-radius:2px;margin-top:6px">
-            <div style="height:4px;background:#ef4444;border-radius:2px;width:${Math.min(100,(amt/total*100)).toFixed(0)}%"></div>
-          </div>
-          <div class="text-xs text-gray mt4">${(amt/total*100).toFixed(1)}%</div>
-        </div>`).join('')}
-    </div>`:''}
+// ════════════════════════════════════════════════════════════════
+// TAB 1: المصروفات
+// ════════════════════════════════════════════════════════════════
+const EXP_CATS=['وقود','صيانة وإصلاح','إيجار','مرافق (ماء/كهرباء/تلفون)',
+  'تأمين','رسوم حكومية','مصاريف إدارية','قطع غيار','نثريات','أخرى'];
 
-    <!-- Table -->
+function renderExpTab(){
+  const recs = DB.getAll('expenses').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const total = recs.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  return `<div>
+    <div class="flex-between mb12">
+      <div class="kpi-card card-sm" style="border-top:3px solid #dc2626;min-width:160px;text-align:center">
+        <div class="text-xs text-gray">إجمالي المصروفات</div>
+        <div style="font-size:18px;font-weight:700;color:#dc2626">${curr(total)}</div>
+      </div>
+      <button class="btn btn-primary" onclick="openExpModal()">＋ مصروف جديد</button>
+    </div>
     <div class="tbl-wrap"><table>
       <thead><tr>
-        <th>التاريخ</th><th>الفئة</th><th>المبلغ</th><th>السيارة</th>
-        <th>الكمية/الوحدة</th><th>السعر/وحدة</th><th>المرجع</th><th>البيان</th><th>إجراء</th>
+        <th>التاريخ</th><th>الفئة</th><th>البيان</th><th>المبلغ</th>
+        <th>طريقة الدفع</th><th>قيد اليومية</th><th>إجراء</th>
       </tr></thead>
       <tbody>
-        ${filtered.map(e=>{
-          const truck=e.truckId?DB.getById('trucks',e.truckId):null;
-          return `<tr>
-            <td>${fmtDate(e.date)}</td>
-            <td>${badge(e.category,catColors[e.category]||'gray')}</td>
-            <td class="tabular font-bold text-red">${curr(e.amount)}</td>
-            <td class="font-mono text-sm">${truck?truck.plateNo:e.truckPlate||'—'}</td>
-            <td class="tabular text-gray">${e.qty?e.qty+' '+(e.unit||''):e.unit||'—'}</td>
-            <td class="tabular text-gray">${e.unitPrice?curr(e.unitPrice):'—'}</td>
-            <td class="font-mono text-xs text-gray">${e.receiptNo||'—'}</td>
-            <td class="text-gray">${e.description||'—'}</td>
-            <td><div class="flex" style="gap:3px">
-              <button class="btn-icon bi-edit" onclick="openExpModal('',${e.id})">✏️</button>
-              <button class="btn-icon bi-del" onclick="deleteExp(${e.id})">🗑️</button>
-            </div></td>
-          </tr>`;
-        }).join('')||`<tr><td colspan="9" class="tbl-empty"><span class="tbl-empty-icon">💸</span>لا توجد مصروفات</td></tr>`}
+      ${recs.length===0
+        ?'<tr><td colspan="7" class="tbl-empty"><span class="tbl-empty-icon">💸</span>لا توجد مصروفات</td></tr>'
+        :recs.map(r=>`<tr>
+          <td class="text-xs">${fmtDate(r.date)}</td>
+          <td>${badge(r.category||'—','gray')}</td>
+          <td class="text-xs">${r.description||'—'}</td>
+          <td class="font-bold text-red">${curr(r.amount)}</td>
+          <td class="text-xs">${r.payType||'نقدي'}</td>
+          <td>${r._jrnId?badge('✓ مقيّد','green'):badge('غير مقيّد','gray')}</td>
+          <td><div class="flex" style="gap:4px">
+            <button class="btn btn-xs" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="openExpModal(${r.id})">تعديل</button>
+            <button class="btn btn-xs" style="background:#dc2626;color:#fff;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="deleteExp(${r.id})">🗑️</button>
+          </div></td>
+        </tr>`).join('')}
       </tbody>
-      ${filtered.length>0?`<tfoot><tr>
-        <td colspan="2">الإجمالي</td>
-        <td class="tabular font-bold text-red">${curr(total)}</td>
-        <td colspan="6"></td>
-      </tr></tfoot>`:''}
     </table></div>
   </div>`;
 }
 
-function openExpModal(defaultCat, editId){
-  const e=editId?DB.getById('expenses',editId):null;
-  const trucks=DB.getAll('trucks');
-  const suppliers=DB.getAll('suppliers');
-  const defCat=e?.category||defaultCat||EXP_CATS[0];
-  const v=(k,d='')=>e?.[k]??d;
-  const isFuel=defCat==='وقود';
-  const isMaint=defCat==='صيانة وإصلاح';
-  const isSalary=defCat==='رواتب وأجور';
-
-  const truckOpts=trucks.map(t=>`<option value="${t.id}" ${v('truckId')===t.id?'selected':''}>${t.plateNo}${t.driverName?' — '+t.driverName:''}</option>`).join('');
-  const suppOpts=suppliers.map(s=>`<option ${v('supplierId')===s.name?'selected':''}>${s.name}</option>`).join('');
-
-  openModal(editId?'تعديل مصروف':(defaultCat?`إضافة: ${defaultCat}`:'إضافة مصروف'),`
-    <div class="form-row fr2 mb10">
-      <div class="form-group"><label><span class="req">*</span>التاريخ</label>
-        <input type="date" id="ex-date" value="${v('date',todayStr())}">
-      </div>
-      <div class="form-group"><label><span class="req">*</span>الفئة</label>
-        <select id="ex-cat" onchange="onExpCatChange(this)">
-          ${EXP_CATS.map(c=>`<option ${defCat===c?'selected':''}>${c}</option>`).join('')}
-        </select>
-      </div>
-    </div>
-
-    <!-- Fuel specific fields -->
-    <div id="ex-fuel-row" style="${isFuel?'':'display:none'}" class="card-sm mb10" style="background:#fff7ed">
-      <div style="font-size:10px;font-weight:700;color:#d97706;margin-bottom:8px">⛽ بيانات الوقود</div>
-      <div class="form-row fr3">
-        <div class="form-group"><label>عدد اللترات</label>
-          <input type="number" id="ex-liters" value="${v('qty')}" placeholder="0" oninput="calcFuelTotal()">
-        </div>
-        <div class="form-group"><label>سعر اللتر (ج.م)</label>
-          <input type="number" id="ex-literprice" value="${v('unitPrice')}" placeholder="0.00" oninput="calcFuelTotal()">
-        </div>
-        <div class="form-group"><label>قراءة العداد (اختياري)</label>
-          <input type="number" id="ex-odometer" value="${v('odometer')}" placeholder="كم">
-        </div>
-      </div>
-    </div>
-
-    <!-- Maintenance specific -->
-    <div id="ex-maint-row" style="${isMaint?'':'display:none'}" class="form-group mb10">
-      <label>نوع الصيانة</label>
-      <select id="ex-maint-type">
-        ${['تغيير زيت','فلاتر','إطارات','فرامل','محرك','كهرباء','هيكل','فحص دوري','أخرى']
-          .map(t=>`<option ${v('maintType')===t?'selected':''}>${t}</option>`).join('')}
-      </select>
-    </div>
-
-    <!-- Salary specific -->
-    <div id="ex-salary-row" style="${isSalary?'':'display:none'}" class="form-row fr2 mb10">
-      <div class="form-group"><label>اسم الموظف / السائق</label>
-        <input id="ex-empname" value="${v('empName')}" placeholder="اسم الموظف">
-      </div>
-      <div class="form-group"><label>الشهر</label>
-        <input type="month" id="ex-month" value="${v('month',new Date().toISOString().slice(0,7))}">
-      </div>
-    </div>
-
-    <div class="form-row fr2 mb10">
-      <div class="form-group"><label><span class="req">*</span>المبلغ الإجمالي (ج.م)</label>
-        <input type="number" id="ex-amount" value="${v('amount')}" placeholder="0.00">
-      </div>
-      <div class="form-group"><label>السيارة المرتبطة</label>
-        <select id="ex-truck"><option value="">— غير مرتبطة —</option>${truckOpts}</select>
-      </div>
-    </div>
-    <div class="form-row fr2 mb10">
-      <div class="form-group"><label>الجهة المموِّلة / المورد</label>
-        <select id="ex-supp"><option value="">—</option>${suppOpts}</select>
-      </div>
-      <div class="form-group"><label>رقم الفاتورة / الإيصال</label>
-        <input id="ex-receipt" value="${v('receiptNo')}" placeholder="INV-001">
-      </div>
-    </div>
-    <div class="form-group"><label>البيان / الوصف</label>
-      <input id="ex-desc" value="${v('description')}" placeholder="تفاصيل إضافية">
-    </div>`,
+function openExpModal(editId){
+  const r = editId?DB.getById('expenses',editId):null;
+  const body=`<div class="form-row fr2">
+    <div class="form-group"><label><span class="req">*</span> التاريخ</label>
+      <input type="date" id="ex-date" value="${r?.date||todayStr()}"></div>
+    <div class="form-group"><label><span class="req">*</span> الفئة</label>
+      <select id="ex-cat">
+        ${EXP_CATS.map(c=>`<option${c===(r?.category||'')?' selected':''}>${c}</option>`).join('')}
+      </select></div>
+  </div>
+  <div class="form-row fr2">
+    <div class="form-group"><label><span class="req">*</span> المبلغ</label>
+      <input type="number" id="ex-amt" min="0" step="0.01" value="${r?.amount||''}"></div>
+    <div class="form-group"><label>طريقة الدفع</label>
+      <select id="ex-pay">
+        ${['نقدي','بنك','شيك آجل','شيك فوري'].map(p=>`<option${p===(r?.payType||'نقدي')?' selected':''}>${p}</option>`).join('')}
+      </select></div>
+  </div>
+  <div class="form-group"><label>البيان / الملاحظات</label>
+    <input id="ex-desc" value="${r?.description||''}"></div>
+  <div class="form-row fr2">
+    <div class="form-group"><label>السيارة (اختياري)</label>
+      <select id="ex-truck">
+        <option value="">— عام —</option>
+        ${DB.getAll('trucks').map(t=>`<option value="${t.plateNo}"${t.plateNo===(r?.truck||'')?' selected':''}>${t.plateNo}</option>`).join('')}
+      </select></div>
+    <div class="form-group"><label>المورد / الجهة (اختياري)</label>
+      <input id="ex-vendor" value="${r?.vendor||''}"></div>
+  </div>
+  <div class="alert alert-blue mt8" style="font-size:11px">
+    <span>ℹ️</span><span>سيُقيَّد هذا المصروف تلقائياً في دفتر اليومية عند الحفظ</span>
+  </div>`;
+  openModal(editId?'تعديل مصروف':'مصروف جديد', body,
     `<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
-     <button class="btn btn-primary" onclick="saveExp(${editId||'null'})">💾 حفظ</button>`,
+     <button class="btn btn-primary" data-eid="${editId||''}" onclick="saveExp(this.dataset.eid?Number(this.dataset.eid):null)">💾 حفظ وتقييد</button>`,
     'modal-md');
 }
 
-function onExpCatChange(sel){
-  const cat=sel.value;
-  document.getElementById('ex-fuel-row').style.display   = cat==='وقود'?'':'none';
-  document.getElementById('ex-maint-row').style.display  = cat==='صيانة وإصلاح'?'':'none';
-  document.getElementById('ex-salary-row').style.display = cat==='رواتب وأجور'?'':'none';
-}
-
-function calcFuelTotal(){
-  const liters=Number(document.getElementById('ex-liters')?.value)||0;
-  const price =Number(document.getElementById('ex-literprice')?.value)||0;
-  const total=liters*price;
-  const el=document.getElementById('ex-amount');
-  if(el&&total>0) el.value=total.toFixed(2);
-}
-
 function saveExp(editId){
-  const cat=document.getElementById('ex-cat')?.value;
-  const amt=Number(document.getElementById('ex-amount')?.value);
   const date=document.getElementById('ex-date')?.value||todayStr();
-  if(!amt)return toast('أدخل المبلغ','error');
-  const truckSel=document.getElementById('ex-truck');
-  const truckId=truckSel?.value||'';
-  const truck=truckId?DB.getById('trucks',truckId):null;
-  const data={
-    date, category:cat,
-    amount:amt,
-    truckId, truckPlate:truck?.plateNo||'',
-    supplierId:document.getElementById('ex-supp')?.value||'',
-    receiptNo:document.getElementById('ex-receipt')?.value||'',
-    description:document.getElementById('ex-desc')?.value||'',
-    // Fuel
-    qty:Number(document.getElementById('ex-liters')?.value)||0,
-    unitPrice:Number(document.getElementById('ex-literprice')?.value)||0,
-    unit:cat==='وقود'?'لتر':'',
-    odometer:Number(document.getElementById('ex-odometer')?.value)||0,
-    // Maintenance
-    maintType:document.getElementById('ex-maint-type')?.value||'',
-    // Salary
-    empName:document.getElementById('ex-empname')?.value||'',
-    month:document.getElementById('ex-month')?.value||'',
-  };
-  if(editId){DB.update('expenses',editId,data);toast('تم التعديل ✓');}
-  else{DB.insert('expenses',data);toast('تمت الإضافة ✓');}
-  closeModal();nav('expenses');
-}
-function deleteExp(id){confirmDelete('حذف هذا المصروف؟',()=>{DB.remove('expenses',id);toast('تم الحذف');nav('expenses');});}
+  const cat =document.getElementById('ex-cat')?.value;
+  const amt =Number(document.getElementById('ex-amt')?.value);
+  const pay =document.getElementById('ex-pay')?.value||'نقدي';
+  const desc=document.getElementById('ex-desc')?.value||'';
+  const truck=document.getElementById('ex-truck')?.value||'';
+  const vendor=document.getElementById('ex-vendor')?.value||'';
+  if(!cat)  return toast('اختر الفئة','error');
+  if(!amt)  return toast('أدخل المبلغ','error');
 
-// ═══════════════════════════════════════════════════════
-// INCOME STATEMENT — قائمة الدخل الحقيقية
-// ═══════════════════════════════════════════════════════
-let _IS={from:'2026-01-01',to:todayStr()};
+  // Determine expense account
+  const expAcct = cat==='وقود'?{code:'5020',name:'مصروف وقود'}
+    : cat==='رواتب وأجور'?{code:'5010',name:'مصروف رواتب وأجور'}
+    : cat==='صيانة وإصلاح'?{code:'5030',name:'مصروف صيانة'}
+    : {code:'5000',name:'مصروف '+cat};
+  const payA = payAcct(pay);
+  const fullDesc = cat+(truck?' — '+truck:'')+(vendor?' — '+vendor:'')+(desc?' — '+desc:'');
+
+  let jrnId = null;
+  if(!editId){
+    // Auto-create journal entry
+    const jrn = autoJrnEntry({
+      date, desc:fullDesc, amount:amt,
+      debitCode:expAcct.code, debitName:expAcct.name,
+      creditCode:payA.code,   creditName:payA.name,
+      entryType:'مصروف', ref:'exp-auto',
+    });
+    jrnId = jrn?.id;
+  }
+
+  const data={date,category:cat,amount:amt,payType:pay,description:desc,truck,vendor,_jrnId:jrnId||undefined};
+  if(editId) DB.update('expenses',editId,data);
+  else       DB.insert('expenses',data);
+  toast('✅ تم الحفظ والتقييد في اليومية');
+  closeModal();
+  window._EXP_TAB='expenses';
+  nav('expenses');
+}
+
+function deleteExp(id){
+  if(!confirm('حذف هذا المصروف؟')) return;
+  DB.remove('expenses',id);
+  toast('تم الحذف');
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB 2: الرواتب والأجور
+// ════════════════════════════════════════════════════════════════
+function renderSalTab(){
+  const recs=DB.getAll('expenses').filter(r=>r.category==='رواتب وأجور')
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const total=recs.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  return `<div>
+    <div class="flex-between mb12">
+      <div class="kpi-card card-sm" style="border-top:3px solid #7c3aed;min-width:160px;text-align:center">
+        <div class="text-xs text-gray">إجمالي الرواتب المصروفة</div>
+        <div style="font-size:18px;font-weight:700;color:#7c3aed">${curr(total)}</div>
+      </div>
+      <button class="btn btn-primary" onclick="openSalModal()">＋ صرف راتب / أجر</button>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>التاريخ</th><th>الموظف/السائق</th><th>البيان</th><th>المبلغ</th><th>طريقة الدفع</th><th>قيد اليومية</th><th>إجراء</th></tr></thead>
+      <tbody>
+      ${recs.length===0
+        ?'<tr><td colspan="7" class="tbl-empty"><span class="tbl-empty-icon">👷</span>لا توجد رواتب مصروفة</td></tr>'
+        :recs.map(r=>`<tr>
+          <td class="text-xs">${fmtDate(r.date)}</td>
+          <td><strong>${r.vendor||r.truck||'—'}</strong></td>
+          <td class="text-xs">${r.description||'—'}</td>
+          <td class="font-bold" style="color:#7c3aed">${curr(r.amount)}</td>
+          <td class="text-xs">${r.payType||'نقدي'}</td>
+          <td>${r._jrnId?badge('✓ مقيّد','green'):badge('غير مقيّد','gray')}</td>
+          <td><button class="btn btn-xs" style="background:#dc2626;color:#fff;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit" onclick="deleteExp(${r.id})">🗑️</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+function openSalModal(){
+  const body=`<div class="form-row fr2">
+    <div class="form-group"><label><span class="req">*</span> التاريخ</label>
+      <input type="date" id="sl-date" value="${todayStr()}"></div>
+    <div class="form-group"><label><span class="req">*</span> اسم الموظف / السائق</label>
+      <input id="sl-name" placeholder="مثال: محمد السائق"></div>
+  </div>
+  <div class="form-row fr2">
+    <div class="form-group"><label><span class="req">*</span> المبلغ</label>
+      <input type="number" id="sl-amt" min="0" step="0.01"></div>
+    <div class="form-group"><label>طريقة الدفع</label>
+      <select id="sl-pay">
+        ${['نقدي','بنك','شيك آجل'].map(p=>`<option>${p}</option>`).join('')}
+      </select></div>
+  </div>
+  <div class="form-group"><label>البيان (شهر الراتب / نوع الأجر)</label>
+    <input id="sl-desc" placeholder="مثال: راتب مايو 2026 — سائق"></div>
+  <div class="alert alert-blue mt8" style="font-size:11px">
+    <span>ℹ️</span><span>سيُقيَّد تلقائياً: مدين مصروف رواتب ← دائن الصندوق/البنك</span>
+  </div>`;
+  openModal('صرف راتب / أجر', body,
+    `<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
+     <button class="btn btn-primary" onclick="saveSal()">💾 صرف وتقييد</button>`,
+    'modal-md');
+}
+
+function saveSal(){
+  const date=document.getElementById('sl-date')?.value||todayStr();
+  const name=document.getElementById('sl-name')?.value?.trim();
+  const amt =Number(document.getElementById('sl-amt')?.value);
+  const pay =document.getElementById('sl-pay')?.value||'نقدي';
+  const desc=document.getElementById('sl-desc')?.value||'';
+  if(!name) return toast('أدخل اسم الموظف','error');
+  if(!amt)  return toast('أدخل المبلغ','error');
+  const payA = payAcct(pay);
+  const fullDesc='راتب/أجر — '+name+(desc?' — '+desc:'');
+  const jrn=autoJrnEntry({
+    date, desc:fullDesc, amount:amt,
+    debitCode:'5010', debitName:'مصروف رواتب وأجور',
+    creditCode:payA.code, creditName:payA.name,
+    entryType:'راتب',
+  });
+  DB.insert('expenses',{date,category:'رواتب وأجور',amount:amt,payType:pay,description:desc,vendor:name,_jrnId:jrn?.id});
+  toast('✅ تم صرف الراتب وتقييده في اليومية');
+  closeModal();
+  window._EXP_TAB='salaries';
+  nav('expenses');
+}
+
+// ════════════════════════════════════════════════════════════════
+// TAB 3: مستحقات الشركاء
+// ════════════════════════════════════════════════════════════════
+function renderPartnersTab(){
+  const partners=DB.getAll('partners');
+  if(!partners.length) return `<div class="card" style="text-align:center;padding:40px;color:#94a3b8">
+    <div style="font-size:40px">🤝</div>
+    <p class="mt8 font-bold">لا يوجد شركاء</p>
+    <p class="text-xs mt4">أضف الشركاء أولاً من صفحة الشركاء</p>
+    <button class="btn btn-primary mt12" onclick="nav('partners')">الذهاب لصفحة الشركاء</button>
+  </div>`;
+
+  // Calc total profit from sarkis
+  const totalProfit=DB.getAll('sarkis').filter(s=>s.status==='معتمد')
+    .reduce((t,s)=>t+(Number(s.totalProfit)||0),0);
+  // Total paid to partners
+  const allPayments=DB.getAll('expenses').filter(r=>r.category==='مستحق شريك');
+
+  return `<div>
+    <div class="alert alert-blue mb12" style="font-size:11px">
+      <span>📊</span>
+      <div>إجمالي الأرباح المعتمدة: <strong>${curr(totalProfit)}</strong> — يتوزع على الشركاء بحسب نسب المشاركة</div>
+    </div>
+    <div style="display:grid;gap:12px">
+    ${partners.map(p=>{
+      const share=(Number(p.sharePercent)||0)/100;
+      const due=totalProfit*share;
+      const paid=allPayments.filter(r=>r.vendor===p.name).reduce((t,r)=>t+(Number(r.amount)||0),0);
+      const remaining=due-paid;
+      return `<div class="card" style="border-right:4px solid ${remaining>0?'#d97706':'#16a34a'}">
+        <div class="flex-between mb8">
+          <div>
+            <div style="font-size:14px;font-weight:700">${p.name}</div>
+            <div class="text-xs text-gray">نسبة المشاركة: <strong>${p.sharePercent||0}%</strong></div>
+          </div>
+          <div style="text-align:center">
+            <div class="text-xs text-gray">المستحق</div>
+            <div style="font-size:18px;font-weight:700;color:#d97706">${curr(due)}</div>
+          </div>
+          <div style="text-align:center">
+            <div class="text-xs text-gray">المدفوع</div>
+            <div style="font-size:16px;font-weight:700;color:#16a34a">${curr(paid)}</div>
+          </div>
+          <div style="text-align:center">
+            <div class="text-xs text-gray">المتبقي</div>
+            <div style="font-size:16px;font-weight:700;color:${remaining>0?'#dc2626':'#16a34a'}">${curr(remaining)}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            ${remaining>0
+              ?`<button class="btn btn-primary btn-sm" data-pname="${p.name.replace(/'/g,'')}" data-pamt="${remaining.toFixed(2)}" onclick="openPartnerPayModal(this.dataset.pname,this.dataset.pamt)">صرف مستحقات</button>`
+              :`<span class="badge badge-green" style="align-self:center">✅ مسوّى</span>`}
+            <button class="btn btn-gray btn-sm" data-pname="${p.name.replace(/'/g,'')}" onclick="showPartnerHistory(this.dataset.pname)">سجل المدفوعات</button>
+          </div>
+        </div>
+        <div style="background:#f8fafc;border-radius:8px;height:8px;overflow:hidden">
+          <div style="background:#16a34a;height:100%;width:${Math.min(100,due>0?paid/due*100:0).toFixed(1)}%;transition:width .5s"></div>
+        </div>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>`;
+}
+
+function openPartnerPayModal(partnerName, remaining){
+  const body=`<div class="alert alert-blue mb12" style="font-size:11px">
+    <span>🤝</span><span>المتبقي من مستحقات <strong>${partnerName}</strong>: <strong>${curr(remaining)}</strong></span>
+  </div>
+  <div class="form-row fr2">
+    <div class="form-group"><label><span class="req">*</span> التاريخ</label>
+      <input type="date" id="pp-date" value="${todayStr()}"></div>
+    <div class="form-group"><label><span class="req">*</span> المبلغ المدفوع</label>
+      <input type="number" id="pp-amt" min="0" step="0.01" value="${remaining}"></div>
+  </div>
+  <div class="form-group"><label>طريقة الدفع</label>
+    <select id="pp-pay">
+      ${['نقدي','بنك','شيك آجل'].map(p=>`<option>${p}</option>`).join('')}
+    </select></div>
+  <div class="form-group"><label>ملاحظات</label>
+    <input id="pp-desc" placeholder="مثال: دفعة على حساب المستحقات"></div>
+  <div class="alert alert-yellow mt8" style="font-size:11px">
+    <span>⚠️</span><span>سيُقيَّد تلقائياً: مدين حساب الشريك ← دائن الصندوق/البنك</span>
+  </div>`;
+  openModal('صرف مستحقات الشريك — '+partnerName, body,
+    `<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
+     <button class="btn btn-primary" data-pname="${partnerName}" onclick="savePartnerPay(this.dataset.pname)">💾 صرف وتقييد</button>`,
+    'modal-md');
+}
+
+function savePartnerPay(partnerName){
+  const date=document.getElementById('pp-date')?.value||todayStr();
+  const amt =Number(document.getElementById('pp-amt')?.value);
+  const pay =document.getElementById('pp-pay')?.value||'نقدي';
+  const desc=document.getElementById('pp-desc')?.value||'';
+  if(!amt) return toast('أدخل المبلغ','error');
+  const payA=payAcct(pay);
+  const fullDesc='مستحقات الشريك — '+partnerName+(desc?' — '+desc:'');
+  const jrn=autoJrnEntry({
+    date, desc:fullDesc, amount:amt,
+    debitCode:'3001', debitName:'حساب الشريك — '+partnerName,
+    creditCode:payA.code, creditName:payA.name,
+    entryType:'صرف شريك',
+  });
+  DB.insert('expenses',{date,category:'مستحق شريك',amount:amt,payType:pay,description:desc||fullDesc,vendor:partnerName,_jrnId:jrn?.id});
+  toast('✅ تم الصرف والتقييد في اليومية');
+  closeModal();
+  window._EXP_TAB='partners';
+  nav('expenses');
+}
+
+function showPartnerHistory(name){
+  const payments=DB.getAll('expenses').filter(r=>r.vendor===name&&r.category==='مستحق شريك')
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const total=payments.reduce((t,r)=>t+(Number(r.amount)||0),0);
+  openModal('سجل مدفوعات — '+name,
+    `<div class="tbl-wrap"><table>
+      <thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>ملاحظات</th></tr></thead>
+      <tbody>
+      ${payments.length===0
+        ?'<tr><td colspan="4" class="tbl-empty">لا توجد مدفوعات</td></tr>'
+        :payments.map(r=>`<tr>
+          <td class="text-xs">${fmtDate(r.date)}</td>
+          <td class="font-bold text-green">${curr(r.amount)}</td>
+          <td class="text-xs">${r.payType||'نقدي'}</td>
+          <td class="text-xs">${r.description||'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+    ${payments.length?`<div class="flex-between mt10 card-sm"><span>الإجمالي المدفوع</span><strong class="text-green">${curr(total)}</strong></div>`:''}`,
+    '<button class="btn btn-gray" onclick="closeModal()">إغلاق</button>',
+    'modal-md');
+}
