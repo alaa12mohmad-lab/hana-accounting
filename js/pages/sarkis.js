@@ -1,3 +1,21 @@
+// ── Sort column ──────────────────────────────────────────────────
+function sortSarkiBy(key){
+  if(window._SF.sortKey===key){
+    window._SF.sortDir = -window._SF.sortDir;
+  } else {
+    window._SF.sortKey = key;
+    window._SF.sortDir = -1;
+  }
+  nav('sarkis');
+}
+
+// ── Sort icon ────────────────────────────────────────────────────
+function sortIcon(key){
+  if(window._SF.sortKey!==key) return '<span style="opacity:.3;font-size:9px">⇅</span>';
+  return window._SF.sortDir===-1
+    ? '<span style="font-size:9px">▼</span>'
+    : '<span style="font-size:9px">▲</span>';
+}
 // ═══ SARKIS / MANIFESTS ═══
 
 // ── Global state ──────────────────────────────────────────────
@@ -13,7 +31,25 @@ function renderSarkis(){
     if(_SF.client!=='كل العملاء' && s.client!==_SF.client) return false;
     if(_SF.status!=='كل الحالات' && s.status!==_SF.status) return false;
     return true;
-  }).sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+  }).sort(function(a,b){
+    var key = window._SF.sortKey||'date';
+    var dir = window._SF.sortDir||(-1);
+    var av, bv;
+    if(key==='date'){      av=a.date||'';       bv=b.date||'';       return dir*av.localeCompare(bv); }
+    if(key==='client'){    av=a.client||'';     bv=b.client||'';     return dir*av.localeCompare(bv,'ar'); }
+    if(key==='supplier'){  av=a.supplier||'';   bv=b.supplier||'';   return dir*av.localeCompare(bv,'ar'); }
+    if(key==='material'){  av=a.material||'';   bv=b.material||'';   return dir*av.localeCompare(bv,'ar'); }
+    if(key==='netM3'){
+      av=(a.lines||[]).reduce(function(t,l){return t+(Number(l.netCubic)||0);},0);
+      bv=(b.lines||[]).reduce(function(t,l){return t+(Number(l.netCubic)||0);},0);
+      return dir*(av-bv);
+    }
+    if(key==='totalSell'){  return dir*((Number(a.totalSell)||0)-(Number(b.totalSell)||0)); }
+    if(key==='totalBuy'){   return dir*((Number(a.totalBuy)||0)-(Number(b.totalBuy)||0)); }
+    if(key==='totalProfit'){return dir*((Number(a.totalProfit)||0)-(Number(b.totalProfit)||0)); }
+    if(key==='status'){    av=a.status||'';     bv=b.status||'';     return dir*av.localeCompare(bv,'ar'); }
+    return dir*(a.date||'').localeCompare(b.date||'');
+  });
 
   // Totals
   var totSell=0, totBuy=0, totProfit=0, totTrips=0;
