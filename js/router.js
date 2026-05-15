@@ -338,3 +338,26 @@ function excelDateToStr(val){
   }catch(e){}
   return '';
 }
+
+// ── Partner Commission Helper ─────────────────────────────────────
+function getPartnerCommission(lines, sharePercent){
+  var total = lines.reduce(function(s,l){
+    return s + (Number(l.profit)||0);
+  }, 0);
+  return total * (Number(sharePercent)||0) / 100;
+}
+
+// ── Income Statement State ────────────────────────────────────────
+var _IS = {
+  from: new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10),
+  to:   new Date().toISOString().slice(0,10),
+};
+
+// ── Reports State ─────────────────────────────────────────────────
+var _RP = {
+  from:   new Date(new Date().getFullYear(),0,1).toISOString().slice(0,10),
+  to:     new Date().toISOString().slice(0,10),
+  viewBy: 'عميل',
+  mat:    'الكل',
+  tab:    'overview',
+};
