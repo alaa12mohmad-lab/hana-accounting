@@ -27,6 +27,10 @@ function closeModalOnBg(e){
 
 // ── Helpers ───────────────────────────────────────────────────────
 function todayStr(){ return new Date().toISOString().slice(0,10); }
+function pct(n){ return ((Number(n)||0)*100).toFixed(1)+'%'; }
+function writeShadowCopy(){}
+function tryRecoverFromShadow(){}
+function renderBackupBar(){}
 
 function curr(n){
   return new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(Number(n)||0)+' ج.م';
