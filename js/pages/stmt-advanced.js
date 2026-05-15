@@ -1,3 +1,19 @@
+// ── Stub pages (implemented in other files or pending) ────────────
+function renderStmtHistory(){
+  if(typeof renderCustStmt==='function') return renderCustStmt();
+  return '<div class="card"><div class="section-title">📋 سجل المستخلصات</div>'
+    +'<p class="text-gray">يتم تحميل هذه الصفحة من statements.js</p></div>';
+}
+
+function renderRunningBal(){
+  return '<div class="card"><div class="section-title">📊 كشف الحساب المتحرك</div>'
+    +'<p class="text-gray text-xs mt8">اذهب إلى: مستخلص العميل ← اختر العميل ← كشف الحساب</p></div>';
+}
+
+function renderNotes(){
+  return '<div class="card"><div class="section-title">📝 إشعارات المديونية</div>'
+    +'<p class="text-gray text-xs mt8">الإشعارات متاحة من صفحة المستخلصات</p></div>';
+}
 // ═══════════════════════════════════════════════════════════════════
 // DETAILED QUANTITY STATEMENTS — كشف كميات تفصيلي
 // صفحتان: كشف العميل + كشف المورد
