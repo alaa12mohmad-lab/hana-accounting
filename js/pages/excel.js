@@ -228,15 +228,56 @@ function onExcelFileChange(inp){
   if(file) parseExcelFile(file);
 }
 
+
+// ── Fix Excel date string (handles UTC offset issue) ─────────────
+function fixExcelDate(val){
+  if(!val) return '';
+  var s = String(val).trim();
+  // Already yyyy-mm-dd format
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // Date object
+  if(val instanceof Date){
+    // Use local date (not UTC) to avoid timezone shift
+    var y = val.getFullYear();
+    var m = String(val.getMonth()+1).padStart(2,'0');
+    var d = String(val.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  }
+  // Excel serial number
+  if(!isNaN(Number(s)) && Number(s) > 1000){
+    var n = Number(s);
+    // Excel date serial → JS date (local time, not UTC)
+    var d2 = new Date(Math.round((n - 25569) * 86400 * 1000));
+    // Add local timezone offset to correct UTC shift
+    var localDate = new Date(d2.getTime() + d2.getTimezoneOffset() * 60000);
+    var y2 = localDate.getFullYear();
+    var m2 = String(localDate.getMonth()+1).padStart(2,'0');
+    var d3 = String(localDate.getDate()).padStart(2,'0');
+    return y2+'-'+m2+'-'+d3;
+  }
+  // Try to parse as date string
+  try{
+    var parsed = new Date(s);
+    if(!isNaN(parsed)){
+      var y3 = parsed.getFullYear();
+      var m3 = String(parsed.getMonth()+1).padStart(2,'0');
+      var d4 = String(parsed.getDate()).padStart(2,'0');
+      return y3+'-'+m3+'-'+d4;
+    }
+  }catch(e){}
+  return s;
+}
+
 function parseExcelFile(file){
   const reader = new FileReader();
   reader.onload = e=>{
     try{
-      const wb  = XLSX.read(e.target.result, {type:'binary', cellDates:true, dateNF:'yyyy-mm-dd'});
+      // raw:false + dateNF = XLSX converts dates to strings in local format
+      const wb  = XLSX.read(e.target.result, {type:'binary', raw:false, dateNF:'yyyy-mm-dd'});
       // Find sheet named 'بيانات الحوافظ' or use first sheet
       const sheetName = wb.SheetNames.find(n=>n.includes('حوافظ')||n.includes('بيانات')) || wb.SheetNames[0];
       const ws  = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      const rows = XLSX.utils.sheet_to_json(ws, {raw:false, dateNF:'yyyy-mm-dd', defval:''});
 
       if(!rows.length) return toast('الملف فارغ أو لا يحتوي على بيانات','error');
 
