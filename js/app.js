@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', function(){
     company:       renderCompany,
     users:         renderUsers,
     themes:        typeof renderThemes==='function' ? renderThemes : function(){return '<div class="card"><p>ارفع ملف themes.js</p></div>';},
+    clientQty:     typeof renderClientQty==='function'?renderClientQty:function(){return '';},
+    supplierQty:   typeof renderSupplierQty==='function'?renderSupplierQty:function(){return '';},
+    backup:        typeof renderBackup==='function'?renderBackup:function(){return ''},
     invitations:   renderInvitations,
   });
 
