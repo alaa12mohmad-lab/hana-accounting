@@ -1,3 +1,72 @@
+function buildSkThead(){
+  var cols = [
+    {key:null,       label:'رقم'},
+    {key:'date',     label:'التاريخ'},
+    {key:'client',   label:'العميل'},
+    {key:'supplier', label:'المورد'},
+    {key:'material', label:'الخامة'},
+    {key:'netM3',    label:'م³ صافي'},
+    {key:'totalSell',   label:'المبيعات'},
+    {key:'totalBuy',    label:'التكلفة'},
+    {key:'totalProfit', label:'الربح'},
+    {key:'status',   label:'الحالة'},
+    {key:null,       label:'إجراء'},
+  ];
+  var sf  = window._SF || {};
+  var out = '<tr>';
+  cols.forEach(function(c){
+    if(!c.key){
+      out += '<th style="padding:6px 4px">'+c.label+'</th>';
+    } else {
+      var active = sf.sortKey === c.key;
+      var arrow  = active ? (sf.sortDir===-1 ? ' ▼' : ' ▲') : ' ⇅';
+      out += '<th onclick="sortSarkiBy(\''+c.key+'\');" style="'
+        + 'padding:6px 4px;cursor:pointer;user-select:none;white-space:nowrap;'
+        + (active ? 'background:rgba(255,255,255,.15);' : 'opacity:.9;')
+        + '">'
+        + c.label
+        + '<span style="font-size:8px;margin-right:3px;opacity:.8">'+arrow+'</span>'
+        + '</th>';
+    }
+  });
+  out += '</tr>';
+  return out;
+}
+
+
+function buildSkThead(){
+  var cols = [
+    {key:null,     label:'رقم'},
+    {key:'date',   label:'التاريخ'},
+    {key:'client', label:'العميل'},
+    {key:'supplier',label:'المورد'},
+    {key:'material',label:'الخامة'},
+    {key:'netM3',  label:'م³ صافي'},
+    {key:'totalSell', label:'المبيعات'},
+    {key:'totalBuy',  label:'التكلفة'},
+    {key:'totalProfit',label:'الربح'},
+    {key:'status', label:'الحالة'},
+    {key:null,     label:'إجراء'},
+  ];
+  var sf = window._SF || {};
+  var html = '<tr>';
+  cols.forEach(function(c){
+    if(!c.key){
+      html += '<th style="padding:6px 4px">'+c.label+'</th>';
+    } else {
+      var active = sf.sortKey===c.key;
+      var icon   = active ? (sf.sortDir===-1 ? ' ▼':' ▲') : ' ⇅';
+      html += '<th onclick="sortSarkiBy(\''+c.key+'\')" style="'
+        +'padding:6px 4px;cursor:pointer;user-select:none;white-space:nowrap;'
+        +(active?'text-decoration:underline;':'opacity:.85;')
+        +'">'+c.label+'<span style="font-size:9px;margin-right:2px">'+icon+'</span></th>';
+    }
+  });
+  html += '</tr>';
+  return html;
+}
+
+
 // ── Sort column ──────────────────────────────────────────────────
 function sortSarkiBy(key){
   if(window._SF.sortKey===key){
@@ -97,8 +166,7 @@ function renderSarkis(){
 
     // Table
     + '<div class="tbl-wrap"><table>'
-    + '<thead><tr><th>رقم</th><th>التاريخ</th><th>العميل</th><th>المورد</th><th>الخامة</th>'
-    + '<th>م³ صافي</th><th>المبيعات</th><th>التكلفة</th><th>الربح</th><th>الحالة</th><th>إجراء</th></tr></thead>'
+    + '<thead>'+buildSkThead()+'</thead>'
     + '<tbody>'
     + (filtered.length===0
         ? '<tr><td colspan="11" class="tbl-empty"><span class="tbl-empty-icon">📋</span>لا توجد حوافظ — أضف حافظة جديدة</td></tr>'
