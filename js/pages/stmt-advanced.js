@@ -179,58 +179,81 @@ function renderStmtHistory(){
 
 function renderRunningBal(){
   var customers = DB.getAll('customers').map(function(c){ return c.name; });
-  var sel = window._RB_CLIENT || '';
-  var from = window._RB_FROM || '';
-  var to   = window._RB_TO   || '';
+  var suppliers  = DB.getAll('suppliers').map(function(s){ return s.name; });
 
-  var custOpts = ['<option value="">— اختر العميل —</option>']
-    .concat(customers.map(function(c){
-      return '<option value="'+c+'"'+(c===sel?' selected':'')+'>'+c+'</option>';
+  var selType   = window._RB_TYPE   || 'client';
+  var selEntity = window._RB_CLIENT || '';
+  var from      = window._RB_FROM   || '';
+  var to        = window._RB_TO     || '';
+
+  var typeOpts = ['client','supplier'].map(function(t){
+    return '<option value="'+t+'"'+(t===selType?' selected':'')+'>'+(t==='client'?'👤 عميل':'🏭 مورد')+'</option>';
+  }).join('');
+
+  var entities = selType==='client' ? customers : suppliers;
+  var entLabel = selType==='client' ? 'العميل' : 'المورد';
+
+  var entOpts = ['<option value="">— اختر '+entLabel+' —</option>']
+    .concat(entities.map(function(n){
+      return '<option value="'+n+'"'+(n===selEntity?' selected':'')+'>'+n+'</option>';
     })).join('');
 
   var rows = [];
   var runBal = 0;
 
-  if(sel){
-    var cust = DB.getAll('customers').find(function(c){ return c.name===sel; });
-    var ob = Number(cust?.openingBalance)||0;
-    runBal = ob;
+  if(selEntity){
+    if(selType==='client'){
+      var cust = DB.getAll('customers').find(function(c){ return c.name===selEntity; });
+      var ob = Number(cust?.openingBalance)||0;
+      runBal = ob;
+      var txns = [];
+      if(ob!==0) txns.push({date:'0000-00-00',type:'رصيد أول المدة',desc:'رصيد افتتاحي',debit:ob>0?ob:0,credit:ob<0?Math.abs(ob):0});
+      DB.getAll('sarkis').filter(function(sk){
+        return sk.client===selEntity && sk.status!=='ملغي'
+          && (!from||sk.date>=from) && (!to||sk.date<=to);
+      }).forEach(function(sk){
+        txns.push({date:sk.date,type:'فاتورة',desc:'حافظة #'+sk.id+' — '+sk.material,debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id});
+      });
+      DB.getAll('journal').filter(function(j){
+        return j.entryType==='تحصيل' && j.party===selEntity
+          && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
+      }).forEach(function(j){
+        txns.push({date:j.date,type:'تحصيل',desc:j.description||'تحصيل نقدي',debit:0,credit:Number(j.amount)||0});
+      });
+      txns.sort(function(a,b){ return a.date.localeCompare(b.date); });
+      rows = txns.map(function(t){ runBal+=t.debit-t.credit; return Object.assign({},t,{balance:runBal}); });
 
-    // Collect all transactions
-    var txns = [];
-
-    // Opening balance
-    if(ob!==0) txns.push({date:'0000-00-00', type:'رصيد أول المدة', desc:'رصيد افتتاحي', debit:ob>0?ob:0, credit:ob<0?Math.abs(ob):0});
-
-    // Sarkis (invoices)
-    DB.getAll('sarkis').filter(function(sk){
-      return sk.client===sel && sk.status!=='ملغي'
-        && (!from||sk.date>=from) && (!to||sk.date<=to);
-    }).forEach(function(sk){
-      txns.push({date:sk.date, type:'فاتورة', desc:'حافظة #'+sk.id+' — '+sk.material, debit:Number(sk.totalSell)||0, credit:0, ref:'#'+sk.id});
-    });
-
-    // Collections
-    DB.getAll('journal').filter(function(j){
-      return j.entryType==='تحصيل' && j.party===sel
-        && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
-    }).forEach(function(j){
-      txns.push({date:j.date, type:'تحصيل', desc:j.description||'تحصيل نقدي', debit:0, credit:Number(j.amount)||0});
-    });
-
-    // Sort by date
-    txns.sort(function(a,b){ return a.date.localeCompare(b.date); });
-
-    // Calculate running balance
-    rows = txns.map(function(t){
-      runBal += t.debit - t.credit;
-      return Object.assign({},t,{balance:runBal});
-    });
+    } else {
+      // SUPPLIER
+      var supp = DB.getAll('suppliers').find(function(s){ return s.name===selEntity; });
+      var ob2 = Number(supp?.openingBalance)||0;
+      runBal = ob2;
+      var txns2 = [];
+      if(ob2!==0) txns2.push({date:'0000-00-00',type:'رصيد أول المدة',desc:'رصيد افتتاحي',debit:0,credit:ob2>0?ob2:0});
+      DB.getAll('sarkis').filter(function(sk){
+        return sk.supplier===selEntity && sk.status!=='ملغي'
+          && (!from||sk.date>=from) && (!to||sk.date<=to);
+      }).forEach(function(sk){
+        txns2.push({date:sk.date,type:'فاتورة شراء',desc:'حافظة #'+sk.id+' — '+sk.material,debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id});
+      });
+      DB.getAll('journal').filter(function(j){
+        return j.entryType==='دفع' && j.party===selEntity
+          && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
+      }).forEach(function(j){
+        txns2.push({date:j.date,type:'دفع',desc:j.description||'دفع نقدي',debit:Number(j.amount)||0,credit:0});
+      });
+      txns2.sort(function(a,b){ return a.date.localeCompare(b.date); });
+      rows = txns2.map(function(t){ runBal+=t.debit-t.credit; return Object.assign({},t,{balance:runBal}); });
+    }
   }
 
   var totalDebit  = rows.reduce(function(s,r){ return s+r.debit; },0);
   var totalCredit = rows.reduce(function(s,r){ return s+r.credit; },0);
   var finalBal    = rows.length ? rows[rows.length-1].balance : 0;
+
+  var balColor = selType==='client'
+    ? (finalBal>=0?'#dc2626':'#16a34a')
+    : (finalBal<=0?'#dc2626':'#16a34a');
 
   return '<div>'
     +'<div class="page-header">'
@@ -238,8 +261,10 @@ function renderRunningBal(){
     +'</div>'
     +'<div class="card mb12" style="padding:10px 14px">'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">'
-    +'<div class="form-group" style="margin:0;min-width:200px"><label style="font-size:10px">العميل</label>'
-    +'<select data-pg="running-bal" onchange="window._RB_CLIENT=this.value;nav(this.dataset.pg)" style="width:100%">'+custOpts+'</select></div>'
+    +'<div class="form-group" style="margin:0"><label style="font-size:10px">النوع</label>'
+    +'<select data-pg="running-bal" onchange="window._RB_TYPE=this.value;window._RB_CLIENT=\'\';nav(this.dataset.pg)" style="width:120px">'+typeOpts+'</select></div>'
+    +'<div class="form-group" style="margin:0;min-width:180px"><label style="font-size:10px">'+entLabel+'</label>'
+    +'<select data-pg="running-bal" onchange="window._RB_CLIENT=this.value;nav(this.dataset.pg)" style="width:100%">'+entOpts+'</select></div>'
     +'<div class="form-group" style="margin:0"><label style="font-size:10px">من</label>'
     +'<input type="date" value="'+from+'" data-pg="running-bal" onchange="window._RB_FROM=this.value;nav(this.dataset.pg)"></div>'
     +'<div class="form-group" style="margin:0"><label style="font-size:10px">إلى</label>'
@@ -247,32 +272,40 @@ function renderRunningBal(){
     +'<button class="btn btn-gray btn-sm" data-pg="running-bal" onclick="window._RB_CLIENT=\'\';window._RB_FROM=\'\';window._RB_TO=\'\';nav(this.dataset.pg)">✕ مسح</button>'
     +'<button class="btn btn-gray btn-sm" onclick="printRunningBal()">🖨️ طباعة</button>'
     +'</div></div>'
-
-    +(sel && rows.length===0 ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">📭</div><p class="text-gray mt8">لا توجد حركات لهذا العميل</p></div>'
-    : !sel ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">👆</div><p class="text-gray mt8">اختر العميل لعرض كشف الحساب</p></div>'
-    : '<div id="rb-table"><div class="tbl-wrap"><table>'
-    +'<thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>'
-    +'<tbody>'
-    +rows.map(function(r){
-      return '<tr>'
-        +'<td class="text-xs">'+fmtDate(r.date)+'</td>'
-        +'<td>'+statusBadge(r.type)+'</td>'
-        +'<td class="text-xs">'+r.desc+(r.ref?'  <span style="color:#1F4E78;font-size:9px">'+r.ref+'</span>':'')+'</td>'
-        +'<td class="tabular text-red">'+(r.debit>0?curr(r.debit):'—')+'</td>'
-        +'<td class="tabular text-green">'+(r.credit>0?curr(r.credit):'—')+'</td>'
-        +'<td class="tabular font-bold" style="color:'+(r.balance>=0?'#dc2626':'#16a34a')+'">'+curr(Math.abs(r.balance))+(r.balance>=0?' (مدين)':' (دائن)')+'</td>'
-        +'</tr>';
-    }).join('')
-    +'</tbody>'
-    +'<tfoot><tr>'
-    +'<td colspan="3" class="font-bold">الإجمالي</td>'
-    +'<td class="tabular font-bold text-red">'+curr(totalDebit)+'</td>'
-    +'<td class="tabular font-bold text-green">'+curr(totalCredit)+'</td>'
-    +'<td class="tabular font-bold" style="color:'+(finalBal>=0?'#dc2626':'#16a34a')+'">'+curr(Math.abs(finalBal))+(finalBal>=0?' (مدين)':' (دائن)')+'</td>'
-    +'</tr></tfoot>'
-    +'</table></div></div>')
+    +(selEntity && rows.length===0
+      ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">📭</div><p class="text-gray mt8">لا توجد حركات</p></div>'
+      : !selEntity
+      ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">👆</div><p class="text-gray mt8">اختر '+entLabel+' لعرض كشف الحساب</p></div>'
+      : '<div id="rb-table"><div class="tbl-wrap"><table>'
+        +'<thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>'
+        +'<tbody>'
+        +rows.map(function(r){
+          var bal = selType==='client'
+            ? (r.balance>=0?curr(r.balance)+' (مدين)':curr(Math.abs(r.balance))+' (دائن)')
+            : (r.balance<=0?curr(Math.abs(r.balance))+' (مستحق)':curr(r.balance)+' (رصيد)');
+          var balCol = selType==='client'
+            ? (r.balance>=0?'#dc2626':'#16a34a')
+            : (r.balance<=0?'#dc2626':'#16a34a');
+          return '<tr>'
+            +'<td class="text-xs">'+fmtDate(r.date)+'</td>'
+            +'<td>'+statusBadge(r.type)+'</td>'
+            +'<td class="text-xs">'+r.desc+(r.ref?'  <span style="color:#1F4E78;font-size:9px">'+r.ref+'</span>':'')+'</td>'
+            +'<td class="tabular text-red">'+(r.debit>0?curr(r.debit):'—')+'</td>'
+            +'<td class="tabular text-green">'+(r.credit>0?curr(r.credit):'—')+'</td>'
+            +'<td class="tabular font-bold" style="color:'+balCol+'">'+bal+'</td>'
+            +'</tr>';
+        }).join('')
+        +'</tbody>'
+        +'<tfoot><tr>'
+        +'<td colspan="3" class="font-bold">الإجمالي</td>'
+        +'<td class="tabular font-bold text-red">'+curr(totalDebit)+'</td>'
+        +'<td class="tabular font-bold text-green">'+curr(totalCredit)+'</td>'
+        +'<td class="tabular font-bold" style="color:'+balColor+'">'+curr(Math.abs(finalBal))+(selType==='client'?(finalBal>=0?' (مدين)'  :' (دائن)'):(finalBal<=0?' (مستحق)':' (رصيد)'))+'</td>'
+        +'</tr></tfoot>'
+        +'</table></div></div>')
     +'</div>';
 }
+
 
 function printRunningBal(){
   var tbl = document.getElementById('rb-table');
