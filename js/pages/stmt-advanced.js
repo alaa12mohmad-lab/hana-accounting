@@ -1,3 +1,49 @@
+// ── Column filter for qty tables ─────────────────────────────────
+window._QF = {}; // {tableId: {colIdx: value}}
+
+function filterQtyTable(tableId, colIdx, val){
+  if(!window._QF[tableId]) window._QF[tableId] = {};
+  if(val.trim()==='') delete window._QF[tableId][colIdx];
+  else window._QF[tableId][colIdx] = val.trim().toLowerCase();
+
+  var table = document.getElementById(tableId);
+  if(!table) return;
+  var filters = window._QF[tableId] || {};
+  var rows = table.querySelectorAll('tbody tr');
+  rows.forEach(function(row){
+    var cells = row.querySelectorAll('td');
+    var show = true;
+    Object.keys(filters).forEach(function(ci){
+      var cell = cells[ci];
+      if(cell){
+        var text = (cell.textContent||cell.innerText||'').toLowerCase();
+        var inp  = cell.querySelector('input');
+        if(inp) text = inp.value.toLowerCase();
+        if(text.indexOf(filters[ci]) < 0) show = false;
+      }
+    });
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+function clearQtyFilter(tableId){
+  window._QF[tableId] = {};
+  var table = document.getElementById(tableId);
+  if(!table) return;
+  table.querySelectorAll('thead input.col-filter').forEach(function(inp){ inp.value=''; });
+  table.querySelectorAll('tbody tr').forEach(function(r){ r.style.display=''; });
+}
+
+// Build a filter input cell
+function qfInput(tableId, colIdx, placeholder){
+  return '<th style="padding:2px 3px;background:#f8fafc">'
+    +'<input class="col-filter" type="text" placeholder="'+(placeholder||'بحث...')+'"'
+    +' oninput="filterQtyTable(\''+tableId+'\','+colIdx+',this.value)"'
+    +' style="width:100%;font-size:9px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit;direction:rtl">'
+    +'</th>';
+}
+
+
 // ── Stub pages (implemented in other files or pending) ────────────
 function renderStmtHistory(){
   if(typeof renderCustStmt==='function') return renderCustStmt();
@@ -272,7 +318,8 @@ function renderClientQty(){
 
     // Table
     +'<div class="tbl-wrap"><table id="cq-table">'
-    +'<thead><tr>'
+    +'<thead>'
+    +'<tr>'
     +'<th>الحافظة</th><th>التاريخ</th><th>العميل</th><th>المورد</th>'
     +'<th>الخامة</th><th>السيارة</th><th>السائق</th>'
     +'<th style="background:#1a5276;color:#fff">نقلات</th>'
@@ -282,7 +329,25 @@ function renderClientQty(){
     +'<th style="background:#1a5276;color:#fff">سعر البيع</th>'
     +'<th>إجمالي البيع</th>'
     +'<th>الحالة</th><th>حفظ</th>'
-    +'</tr></thead>'
+    +'</tr>'
+    +'<tr>'
+    +qfInput("cq-table",0,"# حافظة")
+    +qfInput("cq-table",1,"تاريخ")
+    +qfInput("cq-table",2,"عميل")
+    +qfInput("cq-table",3,"مورد")
+    +qfInput("cq-table",4,"خامة")
+    +qfInput("cq-table",5,"سيارة")
+    +qfInput("cq-table",6,"سائق")
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +qfInput("cq-table",13,"حالة")
+    +'<th style="padding:2px;background:#f8fafc"><button onclick="clearQtyFilter(\'cq-table\')" style="font-size:9px;padding:2px 5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;cursor:pointer">✕</button></th>'
+    +'</tr>'
+    +'</thead>'
     +'<tbody>'
     +(rows.length===0
       ? '<tr><td colspan="15" class="tbl-empty"><span class="tbl-empty-icon">📊</span>لا توجد بيانات — اختر عميلاً أو غيّر الفلتر</td></tr>'
@@ -356,7 +421,7 @@ function renderSupplierQty(){
     totTrips  += r.trips;
     var net    = Math.max(0, r.trips*r.cubicBuy - r.discountM);
     totCubic  += net;
-    totAmount += net * r.buyPrice;
+    totAmount += r.buyPrice > 0 ? net * r.buyPrice : r.buyTotal;
   });
 
   var suppOpts = ['<option value="">— كل الموردين —</option>']
@@ -404,14 +469,16 @@ function renderSupplierQty(){
     +'<th>م³ صافي</th>'
     +'<th style="background:#4a1942;color:#fff">سعر الشراء</th>'
     +'<th>إجمالي التكلفة</th>'
+    +'<th style="background:#064e3b;color:#fff" title="المحفوظ في الحافظة">محفوظ</th>'
     +'<th>الحالة</th><th>حفظ</th>'
     +'</tr></thead>'
     +'<tbody>'
     +(rows.length===0
-      ? '<tr><td colspan="15" class="tbl-empty"><span class="tbl-empty-icon">📦</span>لا توجد بيانات — اختر مورداً أو غيّر الفلتر</td></tr>'
+      ? '<tr><td colspan="16" class="tbl-empty"><span class="tbl-empty-icon">📦</span>لا توجد بيانات — اختر مورداً أو غيّر الفلتر</td></tr>'
       : rows.map(function(r){
           var net  = Math.max(0, r.trips*r.cubicBuy - r.discountM);
-          var tot  = net * r.buyPrice;
+          // Use stored buyTotal if available and buyPrice is 0
+          var tot  = r.buyPrice > 0 ? net * r.buyPrice : r.buyTotal;
           return '<tr>'
             +'<td><a href="#" onclick="openSarkiModal('+r.skId+');return false" style="color:#dc2626;font-weight:700">#'+r.skId+'</a></td>'
             +'<td class="text-xs">'+fmtDate(r.date)+'</td>'
@@ -430,6 +497,8 @@ function renderSupplierQty(){
             +'<td><input type="number" min="0" step="0.01" value="'+r.buyPrice+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="buyPrice"'
             +' onchange="updateQtyCell(this)" style="width:65px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
             +'<td class="font-bold text-center" style="color:#dc2626" id="tot-s-'+r.skId+'-'+r.lineIdx+'">'+curr(tot)+'</td>'
+            +'<td class="text-center text-xs" style="color:'+(Math.abs(tot-r.buyTotal)<1?'#16a34a':'#d97706')+'" title="المخزون='+curr(r.buyTotal)+'">'
+            +(Math.abs(tot-r.buyTotal)<1?'✓':curr(r.buyTotal))+'</td>'
             +'<td>'+statusBadge(r.status)+'</td>'
             +'<td><button class="btn btn-xs" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-mode="supplier"'
             +' onclick="saveQtyRow(this)" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit">💾</button></td>'
