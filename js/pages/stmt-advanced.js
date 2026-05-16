@@ -87,10 +87,12 @@ function qfFootCell(tableId, colIdx, defaultMode){
     if(!window._QTotals[tableId]) window._QTotals[tableId]={};
     if(!window._QTotals[tableId][colIdx]) window._QTotals[tableId][colIdx]=defaultMode;
   }
-  return '<td data-colidx="'+colIdx+'" oncontextmenu="showFooterMenu(event,\''+tableId+'\','+colIdx+')" '
-    +'style="text-align:center;font-weight:700;font-size:11px;padding:5px 3px;cursor:context-menu;'
-    +'background:#1F4E78;color:#FFE699;border-right:1px solid rgba(255,255,255,.1)" '
-    +'title="انقر بالزر الأيمن لتغيير التجميع"></td>';
+  var bg = tableId==='sq-table' ? '#4a1942' : '#1F4E78';
+  return '<td data-colidx="'+colIdx+'" data-tbl="'+tableId+'" data-ci="'+colIdx+'"'
+    +' oncontextmenu="showFooterMenu(event,this.dataset.tbl,Number(this.dataset.ci))"'
+    +' style="text-align:center;font-weight:700;font-size:11px;padding:5px 3px;cursor:context-menu;'
+    +'background:'+bg+';color:#FFE699;border-right:1px solid rgba(255,255,255,.1)"'
+    +' title="انقر بالزر الأيمن لتغيير التجميع"></td>';
 }
 
 // Call after render
@@ -101,17 +103,7 @@ function initQtyFooters(){
   }, 50);
 }
 
-// Patch filterQtyTable to update footer after filter
-var _origFilterQty = window.filterQtyTable;
-window.filterQtyTable = function(tableId, colIdx, val){
-  _origFilterQty(tableId, colIdx, val);
-  updateQtyFooter(tableId);
-};
-var _origClearQty = window.clearQtyFilter;
-window.clearQtyFilter = function(tableId){
-  _origClearQty(tableId);
-  updateQtyFooter(tableId);
-};
+
 
 // ── Column filter for qty tables ─────────────────────────────────
 window._QF = {}; // {tableId: {colIdx: value}}
@@ -139,6 +131,7 @@ function filterQtyTable(tableId, colIdx, val){
     });
     row.style.display = show ? '' : 'none';
   });
+  updateQtyFooter(tableId);
 }
 
 function clearQtyFilter(tableId){
@@ -147,6 +140,7 @@ function clearQtyFilter(tableId){
   if(!table) return;
   table.querySelectorAll('thead input.col-filter').forEach(function(inp){ inp.value=''; });
   table.querySelectorAll('tbody tr').forEach(function(r){ r.style.display=''; });
+  updateQtyFooter(tableId);
 }
 
 // Build a filter input cell
