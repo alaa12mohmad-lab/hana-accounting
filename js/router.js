@@ -232,3 +232,47 @@ function getSupplierPrice(supplierName, materialName, date){
 function getLastStatement(name,type){
   return DB.getAll('statements').filter(s=>s.entityName===name&&s.type===type&&s.status==='معتمد').sort((a,b)=>b.approvedAt-a.approvedAt)[0]||null;
 }
+
+// ── Journal account helpers ───────────────────────────────────────
+function debitAccount(payType){
+  if(!payType||payType==='نقدي'||payType==='كاش') return {code:'1001',name:'الصندوق'};
+  if(payType==='بنك'||payType==='تحويل') return {code:'1002',name:'البنك'};
+  if(payType==='شيك فوري') return {code:'1002',name:'البنك'};
+  if(payType==='شيك آجل')  return {code:'1003',name:'أوراق قبض'};
+  return {code:'1001',name:'الصندوق'};
+}
+function creditAccount(payType){
+  if(!payType||payType==='نقدي'||payType==='كاش') return {code:'1001',name:'الصندوق'};
+  if(payType==='بنك'||payType==='تحويل') return {code:'1002',name:'البنك'};
+  if(payType==='شيك فوري') return {code:'1002',name:'البنك'};
+  if(payType==='شيك آجل')  return {code:'2002',name:'أوراق دفع'};
+  return {code:'1001',name:'الصندوق'};
+}
+
+// ── Confirm delete helper ─────────────────────────────────────────
+function confirmDelete(msg){
+  return window.confirm(msg||'هل تريد الحذف؟');
+}
+
+// ── Show auth error helper ────────────────────────────────────────
+function showAuthErr(id,msg){
+  var el=document.getElementById(id);
+  if(el){el.style.display='flex';el.innerHTML='<span>❌</span><span>'+msg+'</span>';}
+}
+function clearAuthErr(id){
+  var el=document.getElementById(id);
+  if(el){el.style.display='none';el.innerHTML='';}
+}
+function showAuthTab(tab){
+  var li=document.getElementById('auth-login');
+  var re=document.getElementById('auth-register');
+  var tl=document.getElementById('tab-login');
+  var tr=document.getElementById('tab-register');
+  if(tab==='login'){
+    if(li)li.style.display='';if(re)re.style.display='none';
+    if(tl)tl.classList.add('active-tab');if(tr)tr.classList.remove('active-tab');
+  } else {
+    if(li)li.style.display='none';if(re)re.style.display='';
+    if(tl)tl.classList.remove('active-tab');if(tr)tr.classList.add('active-tab');
+  }
+}
