@@ -277,7 +277,7 @@ function renderPartnersTab(){
   </div>`;
 
   // ── الحساب الصحيح: م³ صافي × سعر المتر للشريك لكل خامة ──
-  const approvedSarkis = DB.getAll('sarkis').filter(s=>s.status==='معتمد');
+  const approvedSarkis = DB.getAll('sarkis').filter(s=>s.status!=='ملغي');
   const allPayments    = DB.getAll('expenses').filter(r=>r.category==='مستحق شريك');
 
   const partnerData = partners.map(p=>{
