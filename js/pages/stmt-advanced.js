@@ -330,7 +330,6 @@ function renderNotes(){
         }).join(''))
     +'</tbody></table></div>'
     +'</div>';
-  setTimeout(function(){buildQtyFooter('sq-table');},80);
 }
 
 function printNotes(){
@@ -509,7 +508,6 @@ function renderClientQty(){
         }).join(''))
     +'</tbody></table></div>'
     +'</div>';
-  setTimeout(function(){buildQtyFooter('sq-table');},80);
 }
 
 // ── كشف كميات المورد ─────────────────────────────────────────────
