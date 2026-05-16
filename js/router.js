@@ -96,23 +96,20 @@ function printHeaderHTML(){
 // ── Modal ─────────────────────────────────────────────────────────
 function openModal(title, body, footer, cls='modal-lg'){
   const ov=document.getElementById('modal-overlay');
-  const mc=document.getElementById('modal-content');
+  const mc=document.getElementById('modal-box');       // was modal-content
   const mt=document.getElementById('modal-title');
   const mb=document.getElementById('modal-body');
-  const mf=document.getElementById('modal-footer');
-  if(!ov||!mc) return;
+  const mf=document.getElementById('modal-foot');     // was modal-footer
+  if(!ov) return;
   if(mt) mt.textContent=title;
   if(mb) mb.innerHTML=body;
   if(mf) mf.innerHTML=footer||'';
-  mc.className='modal-content '+cls;
+  if(mc) mc.className='modal '+cls;
   ov.style.display='flex';
   document.body.style.overflow='hidden';
 }
-function closeModal(){
-  const ov=document.getElementById('modal-overlay');
-  if(ov) ov.style.display='none';
-  document.body.style.overflow='';
-}
+
+
 
 // ── onDBReady wrapper ─────────────────────────────────────────────
 function onDBReady(fn){
