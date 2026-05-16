@@ -268,7 +268,7 @@ function saveSal(){
 // TAB 3: مستحقات الشركاء
 // ════════════════════════════════════════════════════════════════
 function renderPartnersTab(){
-  const partners=DB.getAll('partners');
+  const partners = DB.getAll('partners');
   if(!partners.length) return `<div class="card" style="text-align:center;padding:40px;color:#94a3b8">
     <div style="font-size:40px">🤝</div>
     <p class="mt8 font-bold">لا يوجد شركاء</p>
@@ -276,56 +276,117 @@ function renderPartnersTab(){
     <button class="btn btn-primary mt12" onclick="nav('partners')">الذهاب لصفحة الشركاء</button>
   </div>`;
 
-  // Calc total profit from sarkis
-  const totalProfit=DB.getAll('sarkis').filter(s=>s.status==='معتمد')
-    .reduce((t,s)=>t+(Number(s.totalProfit)||0),0);
-  // Total paid to partners
-  const allPayments=DB.getAll('expenses').filter(r=>r.category==='مستحق شريك');
+  // ── الحساب الصحيح: م³ صافي × سعر المتر للشريك لكل خامة ──
+  const approvedSarkis = DB.getAll('sarkis').filter(s=>s.status==='معتمد');
+  const allPayments    = DB.getAll('expenses').filter(r=>r.category==='مستحق شريك');
+
+  const partnerData = partners.map(p=>{
+    const rates = p.rates || []; // [{material, pricePerCubic}]
+    
+    // حساب المستحق: لكل حافظة معتمدة
+    let due = 0;
+    const details = []; // تفاصيل لكل خامة
+
+    rates.forEach(rate=>{
+      if(!rate.material || !rate.pricePerCubic) return;
+      let netM3 = 0;
+      approvedSarkis.forEach(sk=>{
+        if(sk.material !== rate.material) return;
+        // م³ صافي من كل السطور
+        (sk.lines||[]).forEach(ln=>{
+          netM3 += Number(ln.netSell || ln.netCubic) || 0;
+        });
+      });
+      const subtotal = netM3 * Number(rate.pricePerCubic);
+      if(netM3 > 0){
+        details.push({mat:rate.material, m3:netM3, price:rate.pricePerCubic, sub:subtotal});
+        due += subtotal;
+      }
+    });
+
+    const paid      = allPayments.filter(r=>r.vendor===p.name).reduce((t,r)=>t+(Number(r.amount)||0),0);
+    const remaining = due - paid;
+    return {p, rates, due, paid, remaining, details};
+  });
+
+  const totalDue  = partnerData.reduce((t,d)=>t+d.due, 0);
+  const totalPaid = partnerData.reduce((t,d)=>t+d.paid, 0);
 
   return `<div>
     <div class="alert alert-blue mb12" style="font-size:11px">
       <span>📊</span>
-      <div>إجمالي الأرباح المعتمدة: <strong>${curr(totalProfit)}</strong> — يتوزع على الشركاء بحسب نسب المشاركة</div>
+      <div>
+        إجمالي المستحقات: <strong>${curr(totalDue)}</strong> — 
+        المدفوع: <strong class="text-green">${curr(totalPaid)}</strong> — 
+        المتبقي: <strong class="text-red">${curr(totalDue-totalPaid)}</strong>
+      </div>
     </div>
     <div style="display:grid;gap:12px">
-    ${partners.map(p=>{
-      const share=(Number(p.sharePercent)||0)/100;
-      const due=totalProfit*share;
-      const paid=allPayments.filter(r=>r.vendor===p.name).reduce((t,r)=>t+(Number(r.amount)||0),0);
-      const remaining=due-paid;
-      return `<div class="card" style="border-right:4px solid ${remaining>0?'#d97706':'#16a34a'}">
+    ${partnerData.map(({p,rates,due,paid,remaining,details})=>`
+      <div class="card" style="border-right:4px solid ${remaining>0?'#d97706':'#16a34a'}">
         <div class="flex-between mb8">
           <div>
             <div style="font-size:14px;font-weight:700">${p.name}</div>
-            <div class="text-xs text-gray">نسبة المشاركة: <strong>${p.sharePercent||0}%</strong></div>
+            <div class="text-xs text-gray mt4">
+              ${rates.length>0
+                ? rates.filter(r=>r.material&&r.pricePerCubic).map(r=>`<span style="background:#f1f5f9;padding:2px 8px;border-radius:10px;margin-left:4px">${r.material}: <strong>${r.pricePerCubic} ج.م/م³</strong></span>`).join('')
+                : '<span class="text-gray">لم تُحدَّد أسعار بعد — افتح صفحة الشركاء وأضف الأسعار</span>'}
+            </div>
           </div>
-          <div style="text-align:center">
-            <div class="text-xs text-gray">المستحق</div>
-            <div style="font-size:18px;font-weight:700;color:#d97706">${curr(due)}</div>
-          </div>
-          <div style="text-align:center">
-            <div class="text-xs text-gray">المدفوع</div>
-            <div style="font-size:16px;font-weight:700;color:#16a34a">${curr(paid)}</div>
-          </div>
-          <div style="text-align:center">
-            <div class="text-xs text-gray">المتبقي</div>
-            <div style="font-size:16px;font-weight:700;color:${remaining>0?'#dc2626':'#16a34a'}">${curr(remaining)}</div>
-          </div>
-          <div style="display:flex;gap:6px">
-            ${remaining>0
-              ?`<button class="btn btn-primary btn-sm" data-pname="${p.name.replace(/'/g,'')}" data-pamt="${remaining.toFixed(2)}" onclick="openPartnerPayModal(this.dataset.pname,this.dataset.pamt)">صرف مستحقات</button>`
-              :`<span class="badge badge-green" style="align-self:center">✅ مسوّى</span>`}
-            <button class="btn btn-gray btn-sm" data-pname="${p.name.replace(/'/g,'')}" onclick="showPartnerHistory(this.dataset.pname)">سجل المدفوعات</button>
+          <div style="display:flex;gap:16px;align-items:center">
+            <div style="text-align:center">
+              <div class="text-xs text-gray">المستحق</div>
+              <div style="font-size:16px;font-weight:700;color:#d97706">${curr(due)}</div>
+            </div>
+            <div style="text-align:center">
+              <div class="text-xs text-gray">المدفوع</div>
+              <div style="font-size:16px;font-weight:700;color:#16a34a">${curr(paid)}</div>
+            </div>
+            <div style="text-align:center">
+              <div class="text-xs text-gray">المتبقي</div>
+              <div style="font-size:16px;font-weight:700;color:${remaining>0?'#dc2626':'#16a34a'}">${curr(remaining)}</div>
+            </div>
           </div>
         </div>
-        <div style="background:#f8fafc;border-radius:8px;height:8px;overflow:hidden">
+
+        <!-- تفاصيل الحساب -->
+        ${details.length>0?`
+        <div style="background:#f8fafc;border-radius:8px;padding:8px;margin-bottom:10px">
+          <table style="width:100%;font-size:10px;border-collapse:collapse">
+            <thead><tr style="color:#64748b">
+              <th style="padding:3px 6px;text-align:right">الخامة</th>
+              <th style="padding:3px 6px;text-align:center">م³ صافي</th>
+              <th style="padding:3px 6px;text-align:center">سعر/م³</th>
+              <th style="padding:3px 6px;text-align:center">المستحق</th>
+            </tr></thead>
+            <tbody>
+              ${details.map(d=>`<tr style="border-top:1px solid #e2e8f0">
+                <td style="padding:3px 6px;font-weight:600">${d.mat}</td>
+                <td style="padding:3px 6px;text-align:center">${d.m3.toFixed(1)}</td>
+                <td style="padding:3px 6px;text-align:center">${d.price}</td>
+                <td style="padding:3px 6px;text-align:center;font-weight:700;color:#d97706">${curr(d.sub)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`:''}
+
+        <!-- شريط التقدم -->
+        <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;margin-bottom:10px">
           <div style="background:#16a34a;height:100%;width:${Math.min(100,due>0?paid/due*100:0).toFixed(1)}%;transition:width .5s"></div>
         </div>
-      </div>`;
-    }).join('')}
+
+        <div style="display:flex;gap:6px">
+          ${remaining>0
+            ?`<button class="btn btn-primary btn-sm" data-pname="${p.name}" data-pamt="${remaining.toFixed(2)}" onclick="openPartnerPayModal(this.dataset.pname,this.dataset.pamt)">💰 صرف مستحقات</button>`
+            :`<span class="badge badge-green" style="align-self:center">✅ مسوّى</span>`}
+          <button class="btn btn-gray btn-sm" data-pname="${p.name}" onclick="showPartnerHistory(this.dataset.pname)">📋 سجل المدفوعات</button>
+        </div>
+      </div>
+    `).join('')}
     </div>
   </div>`;
 }
+
 
 function openPartnerPayModal(partnerName, remaining){
   const body=`<div class="alert alert-blue mb12" style="font-size:11px">
