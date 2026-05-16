@@ -19,6 +19,9 @@ function nav(page){
       +'<div style="font-size:36px">🚧</div><p class="text-gray mt8">الصفحة قيد التطوير</p></div>';
   }
   window.scrollTo(0,0);
+  // Build qty footers after render (DOM is ready now)
+  if(page==='clientQty'   && typeof buildQtyFooter==='function') buildQtyFooter('cq-table');
+  if(page==='supplierQty' && typeof buildQtyFooter==='function') buildQtyFooter('sq-table');
 }
 
 function closeModalOnBg(e){
