@@ -1,108 +1,125 @@
-// ── Footer aggregation system ─────────────────────────────────────
-// State: {tableId: {colIdx: 'sum'|'count'|'none'}}
-window._QTotals = {
-  'cq-table': {7:'sum', 8:'sum', 10:'sum', 12:'sum'},  // نقلات, م³عميل, م³صافي, إجمالي
-  'sq-table': {7:'sum', 8:'sum', 10:'sum', 12:'sum'},  // نقلات, م³مورد, م³صافي, إجمالي
+// ══ FOOTER AGGREGATION SYSTEM ════════════════════════════════════
+window._QTotals = {};  // {tableId: {colIdx: 'sum'|'count'|'none'}}
+
+// Default aggregations per table
+var _QDefaults = {
+  'cq-table': {7:'sum',8:'sum',9:'none',10:'sum',11:'none',12:'sum'},
+  'sq-table': {7:'sum',8:'sum',9:'none',10:'sum',11:'none',12:'sum'},
 };
 
-function updateQtyFooter(tableId){
+function getQTotal(tableId, ci){
+  if(!window._QTotals[tableId]) window._QTotals[tableId]={};
+  if(window._QTotals[tableId][ci]!==undefined) return window._QTotals[tableId][ci];
+  var def = _QDefaults[tableId]||{};
+  return def[ci]||'none';
+}
+
+function buildQtyFooter(tableId){
   var table = document.getElementById(tableId);
   if(!table) return;
+
+  // Get or create tfoot
   var tfoot = table.querySelector('tfoot');
-  if(!tfoot) return;
-  var cfg = window._QTotals[tableId] || {};
+  if(!tfoot){ tfoot=document.createElement('tfoot'); table.appendChild(tfoot); }
 
-  // Get visible rows only
+  // Count columns from thead first row
+  var firstRow = table.querySelector('thead tr');
+  var colCount = firstRow ? firstRow.querySelectorAll('th').length : 15;
+
+  // Get visible rows
   var rows = Array.from(table.querySelectorAll('tbody tr'))
-    .filter(function(r){ return r.style.display !== 'none'; });
+    .filter(function(r){ return r.style.display!=='none'; });
 
-  var cells = tfoot.querySelectorAll('td[data-colidx]');
-  cells.forEach(function(cell){
-    var ci = Number(cell.getAttribute('data-colidx'));
-    var mode = cfg[ci] || 'none';
-    if(mode === 'none'){ cell.textContent = ''; return; }
+  var bg = tableId==='sq-table' ? '#4a1942' : '#1F4E78';
+  var tr = document.createElement('tr');
 
-    var vals = rows.map(function(row){
-      var td = row.querySelectorAll('td')[ci];
-      if(!td) return 0;
-      var inp = td.querySelector('input');
-      var raw = inp ? inp.value : (td.textContent||'').replace(/[^0-9.-]/g,'');
-      return Number(raw) || 0;
-    });
+  for(var ci=0; ci<colCount; ci++){
+    var td = document.createElement('td');
+    td.setAttribute('data-ci', ci);
+    var mode = getQTotal(tableId, ci);
 
-    if(mode === 'count'){
-      cell.textContent = rows.length;
-      cell.title = 'عدد الصفوف';
-    } else if(mode === 'sum'){
-      var total = vals.reduce(function(a,b){ return a+b; }, 0);
-      cell.textContent = total % 1 === 0 ? total.toLocaleString('ar-EG')
-        : total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
-      cell.title = 'المجموع';
+    if(ci===0){
+      // Label cell - spans
+      td.textContent = 'المجموع';
+      td.style.cssText = 'background:'+bg+';color:#fff;padding:5px 8px;font-weight:700;font-size:11px;text-align:right;';
+    } else {
+      td.style.cssText = 'text-align:center;font-weight:700;font-size:11px;padding:5px 3px;'
+        +'cursor:context-menu;background:'+bg+';color:'+(mode==='none'?'rgba(255,255,255,.3)':'#FFE699')+';'
+        +'border-right:1px solid rgba(255,255,255,.1);';
+      td.title = 'انقر بالزر الأيمن لتغيير التجميع';
+
+      if(mode==='count'){
+        td.textContent = rows.length;
+      } else if(mode==='sum'){
+        var total=0;
+        rows.forEach(function(row){
+          var cell=row.querySelectorAll('td')[ci];
+          if(!cell) return;
+          var inp=cell.querySelector('input');
+          var raw=inp ? Number(inp.value)||0
+            : Number((cell.textContent||'').replace(/[٠-٩]/g,function(d){
+                return '٠١٢٣٤٥٦٧٨٩'.indexOf(d);
+              }).replace(/[^0-9.-]/g,''))||0;
+          total+=raw;
+        });
+        td.textContent = total===0?'0':total%1===0
+          ? total.toLocaleString('ar-EG')
+          : total.toFixed(2);
+      } else {
+        td.textContent = '';
+      }
+
+      // Right-click menu
+      (function(cell, colIdx, tblId){
+        cell.addEventListener('contextmenu', function(e){
+          e.preventDefault();
+          showFooterMenu(e, tblId, colIdx);
+        });
+      })(td, ci, tableId);
     }
-  });
+    tr.appendChild(td);
+  }
+  tfoot.innerHTML='';
+  tfoot.appendChild(tr);
 }
 
 function showFooterMenu(e, tableId, colIdx){
-  e.preventDefault();
-  // Remove any existing menu
-  var old = document.getElementById('footer-ctx-menu');
+  var old=document.getElementById('footer-ctx-menu');
   if(old) old.remove();
 
-  var cfg = window._QTotals[tableId] || {};
-  var cur = cfg[colIdx] || 'none';
-
-  var menu = document.createElement('div');
-  menu.id = 'footer-ctx-menu';
-  menu.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #e2e8f0;'
-    + 'border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:140px;overflow:hidden;'
-    + 'font-family:Tahoma,sans-serif;direction:rtl;font-size:12px;';
-  menu.style.top  = Math.min(e.clientY, window.innerHeight-130) + 'px';
-  menu.style.right = (window.innerWidth - e.clientX) + 'px';
+  var cur = getQTotal(tableId, colIdx);
+  var menu=document.createElement('div');
+  menu.id='footer-ctx-menu';
+  menu.style.cssText='position:fixed;z-index:9999;background:#fff;border:1px solid #e2e8f0;'
+    +'border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:150px;overflow:hidden;'
+    +'font-family:Tahoma,sans-serif;direction:rtl;font-size:12px;';
+  menu.style.top=Math.min(e.clientY,window.innerHeight-130)+'px';
+  menu.style.right=(window.innerWidth-e.clientX)+'px';
 
   [['none','— لا شيء —'],['sum','∑ مجموع'],['count','# عدد']].forEach(function(opt){
-    var item = document.createElement('div');
-    item.textContent = opt[1];
-    item.style.cssText = 'padding:9px 14px;cursor:pointer;'
-      + (cur===opt[0] ? 'background:#eff6ff;color:#1d4ed8;font-weight:700;' : 'color:#374151;')
-      + 'border-bottom:1px solid #f1f5f9;';
-    item.onmouseenter = function(){ if(cur!==opt[0]) this.style.background='#f8fafc'; };
-    item.onmouseleave = function(){ if(cur!==opt[0]) this.style.background=''; };
-    item.onclick = function(){
+    var item=document.createElement('div');
+    item.textContent=opt[1];
+    item.style.cssText='padding:10px 16px;cursor:pointer;color:#374151;'
+      +'border-bottom:1px solid #f1f5f9;'
+      +(cur===opt[0]?'background:#eff6ff;color:#1d4ed8;font-weight:700;':'');
+    item.onmouseenter=function(){ if(cur!==opt[0]) this.style.background='#f8fafc'; };
+    item.onmouseleave=function(){ if(cur!==opt[0]) this.style.background=''; };
+    item.onclick=function(){
       if(!window._QTotals[tableId]) window._QTotals[tableId]={};
-      if(opt[0]==='none') delete window._QTotals[tableId][colIdx];
-      else window._QTotals[tableId][colIdx] = opt[0];
+      window._QTotals[tableId][colIdx]=opt[0];
       menu.remove();
-      updateQtyFooter(tableId);
+      buildQtyFooter(tableId);
     };
     menu.appendChild(item);
   });
 
   document.body.appendChild(menu);
-  setTimeout(function(){ document.addEventListener('click', function rm(){ menu.remove(); document.removeEventListener('click',rm); }); }, 10);
+  var rm=function(){ menu.remove(); document.removeEventListener('click',rm); };
+  setTimeout(function(){ document.addEventListener('click',rm); },10);
 }
 
-// Build a footer cell
-function qfFootCell(tableId, colIdx, defaultMode){
-  if(defaultMode && defaultMode!=='none'){
-    if(!window._QTotals[tableId]) window._QTotals[tableId]={};
-    if(!window._QTotals[tableId][colIdx]) window._QTotals[tableId][colIdx]=defaultMode;
-  }
-  var bg = tableId==='sq-table' ? '#4a1942' : '#1F4E78';
-  return '<td data-colidx="'+colIdx+'" data-tbl="'+tableId+'" data-ci="'+colIdx+'"'
-    +' oncontextmenu="showFooterMenu(event,this.dataset.tbl,Number(this.dataset.ci))"'
-    +' style="text-align:center;font-weight:700;font-size:11px;padding:5px 3px;cursor:context-menu;'
-    +'background:'+bg+';color:#FFE699;border-right:1px solid rgba(255,255,255,.1)"'
-    +' title="انقر بالزر الأيمن لتغيير التجميع"></td>';
-}
-
-// Call after render
-function initQtyFooters(){
-  setTimeout(function(){
-    updateQtyFooter('cq-table');
-    updateQtyFooter('sq-table');
-  }, 50);
-}
-
+// Old qfFootCell stub (no longer used for tfoot building)
+function qfFootCell(){ return ''; }
 
 
 // ── Column filter for qty tables ─────────────────────────────────
@@ -131,7 +148,7 @@ function filterQtyTable(tableId, colIdx, val){
     });
     row.style.display = show ? '' : 'none';
   });
-  updateQtyFooter(tableId);
+  buildQtyFooter(tableId);
 }
 
 function clearQtyFilter(tableId){
@@ -140,7 +157,7 @@ function clearQtyFilter(tableId){
   if(!table) return;
   table.querySelectorAll('thead input.col-filter').forEach(function(inp){ inp.value=''; });
   table.querySelectorAll('tbody tr').forEach(function(r){ r.style.display=''; });
-  updateQtyFooter(tableId);
+  buildQtyFooter(tableId);
 }
 
 // Build a filter input cell
@@ -311,20 +328,9 @@ function renderNotes(){
             +'data-name="'+c.name+'" data-bal="'+c.balance+'" onclick="printSingleNote(this.dataset.name,this.dataset.bal)">🖨️ إشعار</button></td>'
             +'</tr>';
         }).join(''))
-    +'</tbody>'
-    +'<tfoot><tr>'
-    +'<td colspan="7" style="background:#4a1942;color:#fff;padding:5px 8px;font-weight:700;font-size:11px">المجموع — انقر بالزر الأيمن على أي خلية لتغيير التجميع</td>'
-    +qfFootCell('sq-table',7,'sum')
-    +qfFootCell('sq-table',8,'sum')
-    +qfFootCell('sq-table',9,'none')
-    +qfFootCell('sq-table',10,'sum')
-    +qfFootCell('sq-table',11,'none')
-    +qfFootCell('sq-table',12,'sum')
-    +'<td style="background:#4a1942"></td><td style="background:#4a1942"></td><td style="background:#4a1942"></td>'
-    +'</tr></tfoot>'
     +'</tbody></table></div>'
     +'</div>';
-  setTimeout(function(){updateQtyFooter('sq-table');},80);
+  setTimeout(function(){buildQtyFooter('sq-table');},80);
 }
 
 function printNotes(){
@@ -501,20 +507,9 @@ function renderClientQty(){
             +' onclick="saveQtyRow(this)" style="background:#1F4E78;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit">💾</button></td>'
             +'</tr>';
         }).join(''))
-    +'</tbody>'
-    +'<tfoot><tr>'
-    +'<td colspan="7" style="background:#4a1942;color:#fff;padding:5px 8px;font-weight:700;font-size:11px">المجموع — انقر بالزر الأيمن على أي خلية لتغيير التجميع</td>'
-    +qfFootCell('sq-table',7,'sum')
-    +qfFootCell('sq-table',8,'sum')
-    +qfFootCell('sq-table',9,'none')
-    +qfFootCell('sq-table',10,'sum')
-    +qfFootCell('sq-table',11,'none')
-    +qfFootCell('sq-table',12,'sum')
-    +'<td style="background:#4a1942"></td><td style="background:#4a1942"></td><td style="background:#4a1942"></td>'
-    +'</tr></tfoot>'
     +'</tbody></table></div>'
     +'</div>';
-  setTimeout(function(){updateQtyFooter('sq-table');},80);
+  setTimeout(function(){buildQtyFooter('sq-table');},80);
 }
 
 // ── كشف كميات المورد ─────────────────────────────────────────────
