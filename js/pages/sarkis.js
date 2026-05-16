@@ -396,9 +396,9 @@ function updateSkFoot(){
     <td colspan="4" style="font-weight:700">المجموع</td>
     <td style="text-align:center;font-weight:700">${num(t.totalTrips)}</td>
     <td></td>
-    <td style="text-align:center;font-weight:700">${t.totalGross.toFixed(1)}</td>
+    <td style="text-align:center;font-weight:700">${(t.totalGross||0).toFixed(1)}</td>
     <td></td>
-    <td style="text-align:center;font-weight:700;color:#1F4E78">${t.totalNet.toFixed(1)}</td>
+    <td style="text-align:center;font-weight:700;color:#1F4E78">${(t.totalNet||0).toFixed(1)}</td>
     <td colspan="2"></td>
     <td style="font-weight:700;color:#1F4E78">${curr(t.totalSell)}</td>
     <td style="font-weight:700;color:#374151">${curr(t.totalBuy)}</td>
@@ -492,9 +492,9 @@ function viewSarki(id){
         </tbody>
         <tfoot><tr style="background:#fefce8;font-weight:700">
           <td colspan="4" style="padding:6px 5px">المجموع</td>
-          <td style="padding:6px 5px;text-align:center">${t.totalGross.toFixed(1)}</td>
+          <td style="padding:6px 5px;text-align:center">${(t.totalGross||0).toFixed(1)}</td>
           <td></td>
-          <td style="padding:6px 5px;text-align:center;color:#1F4E78">${t.totalNet.toFixed(1)}</td>
+          <td style="padding:6px 5px;text-align:center;color:#1F4E78">${(t.totalNet||0).toFixed(1)}</td>
           <td colspan="2"></td>
           <td style="padding:6px 5px;color:#1F4E78">${curr(t.totalSell)}</td>
           <td style="padding:6px 5px">${curr(t.totalBuy)}</td>
