@@ -1,3 +1,118 @@
+// ── Footer aggregation system ─────────────────────────────────────
+// State: {tableId: {colIdx: 'sum'|'count'|'none'}}
+window._QTotals = {
+  'cq-table': {7:'sum', 8:'sum', 10:'sum', 12:'sum'},  // نقلات, م³عميل, م³صافي, إجمالي
+  'sq-table': {7:'sum', 8:'sum', 10:'sum', 12:'sum'},  // نقلات, م³مورد, م³صافي, إجمالي
+};
+
+function updateQtyFooter(tableId){
+  var table = document.getElementById(tableId);
+  if(!table) return;
+  var tfoot = table.querySelector('tfoot');
+  if(!tfoot) return;
+  var cfg = window._QTotals[tableId] || {};
+
+  // Get visible rows only
+  var rows = Array.from(table.querySelectorAll('tbody tr'))
+    .filter(function(r){ return r.style.display !== 'none'; });
+
+  var cells = tfoot.querySelectorAll('td[data-colidx]');
+  cells.forEach(function(cell){
+    var ci = Number(cell.getAttribute('data-colidx'));
+    var mode = cfg[ci] || 'none';
+    if(mode === 'none'){ cell.textContent = ''; return; }
+
+    var vals = rows.map(function(row){
+      var td = row.querySelectorAll('td')[ci];
+      if(!td) return 0;
+      var inp = td.querySelector('input');
+      var raw = inp ? inp.value : (td.textContent||'').replace(/[^0-9.-]/g,'');
+      return Number(raw) || 0;
+    });
+
+    if(mode === 'count'){
+      cell.textContent = rows.length;
+      cell.title = 'عدد الصفوف';
+    } else if(mode === 'sum'){
+      var total = vals.reduce(function(a,b){ return a+b; }, 0);
+      cell.textContent = total % 1 === 0 ? total.toLocaleString('ar-EG')
+        : total.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+      cell.title = 'المجموع';
+    }
+  });
+}
+
+function showFooterMenu(e, tableId, colIdx){
+  e.preventDefault();
+  // Remove any existing menu
+  var old = document.getElementById('footer-ctx-menu');
+  if(old) old.remove();
+
+  var cfg = window._QTotals[tableId] || {};
+  var cur = cfg[colIdx] || 'none';
+
+  var menu = document.createElement('div');
+  menu.id = 'footer-ctx-menu';
+  menu.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #e2e8f0;'
+    + 'border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:140px;overflow:hidden;'
+    + 'font-family:Tahoma,sans-serif;direction:rtl;font-size:12px;';
+  menu.style.top  = Math.min(e.clientY, window.innerHeight-130) + 'px';
+  menu.style.right = (window.innerWidth - e.clientX) + 'px';
+
+  [['none','— لا شيء —'],['sum','∑ مجموع'],['count','# عدد']].forEach(function(opt){
+    var item = document.createElement('div');
+    item.textContent = opt[1];
+    item.style.cssText = 'padding:9px 14px;cursor:pointer;'
+      + (cur===opt[0] ? 'background:#eff6ff;color:#1d4ed8;font-weight:700;' : 'color:#374151;')
+      + 'border-bottom:1px solid #f1f5f9;';
+    item.onmouseenter = function(){ if(cur!==opt[0]) this.style.background='#f8fafc'; };
+    item.onmouseleave = function(){ if(cur!==opt[0]) this.style.background=''; };
+    item.onclick = function(){
+      if(!window._QTotals[tableId]) window._QTotals[tableId]={};
+      if(opt[0]==='none') delete window._QTotals[tableId][colIdx];
+      else window._QTotals[tableId][colIdx] = opt[0];
+      menu.remove();
+      updateQtyFooter(tableId);
+    };
+    menu.appendChild(item);
+  });
+
+  document.body.appendChild(menu);
+  setTimeout(function(){ document.addEventListener('click', function rm(){ menu.remove(); document.removeEventListener('click',rm); }); }, 10);
+}
+
+// Build a footer cell
+function qfFootCell(tableId, colIdx, defaultMode){
+  if(defaultMode && defaultMode!=='none'){
+    if(!window._QTotals[tableId]) window._QTotals[tableId]={};
+    if(!window._QTotals[tableId][colIdx]) window._QTotals[tableId][colIdx]=defaultMode;
+  }
+  return '<td data-colidx="'+colIdx+'" oncontextmenu="showFooterMenu(event,\''+tableId+'\','+colIdx+')" '
+    +'style="text-align:center;font-weight:700;font-size:11px;padding:5px 3px;cursor:context-menu;'
+    +'background:#1F4E78;color:#FFE699;border-right:1px solid rgba(255,255,255,.1)" '
+    +'title="انقر بالزر الأيمن لتغيير التجميع"></td>';
+}
+
+// Call after render
+function initQtyFooters(){
+  setTimeout(function(){
+    updateQtyFooter('cq-table');
+    updateQtyFooter('sq-table');
+  }, 50);
+}
+
+// Patch filterQtyTable to update footer after filter
+var _origFilterQty = window.filterQtyTable;
+window.filterQtyTable = function(tableId, colIdx, val){
+  _origFilterQty(tableId, colIdx, val);
+  updateQtyFooter(tableId);
+};
+var _origClearQty = window.clearQtyFilter;
+window.clearQtyFilter = function(tableId){
+  _origClearQty(tableId);
+  updateQtyFooter(tableId);
+};
+
 // ── Column filter for qty tables ─────────────────────────────────
 window._QF = {}; // {tableId: {colIdx: value}}
 
@@ -202,8 +317,20 @@ function renderNotes(){
             +'data-name="'+c.name+'" data-bal="'+c.balance+'" onclick="printSingleNote(this.dataset.name,this.dataset.bal)">🖨️ إشعار</button></td>'
             +'</tr>';
         }).join(''))
+    +'</tbody>'
+    +'<tfoot><tr>'
+    +'<td colspan="7" style="background:#4a1942;color:#fff;padding:5px 8px;font-weight:700;font-size:11px">المجموع — انقر بالزر الأيمن على أي خلية لتغيير التجميع</td>'
+    +qfFootCell('sq-table',7,'sum')
+    +qfFootCell('sq-table',8,'sum')
+    +qfFootCell('sq-table',9,'none')
+    +qfFootCell('sq-table',10,'sum')
+    +qfFootCell('sq-table',11,'none')
+    +qfFootCell('sq-table',12,'sum')
+    +'<td style="background:#4a1942"></td><td style="background:#4a1942"></td><td style="background:#4a1942"></td>'
+    +'</tr></tfoot>'
     +'</tbody></table></div>'
     +'</div>';
+  setTimeout(function(){updateQtyFooter('sq-table');},80);
 }
 
 function printNotes(){
@@ -380,8 +507,20 @@ function renderClientQty(){
             +' onclick="saveQtyRow(this)" style="background:#1F4E78;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit">💾</button></td>'
             +'</tr>';
         }).join(''))
+    +'</tbody>'
+    +'<tfoot><tr>'
+    +'<td colspan="7" style="background:#4a1942;color:#fff;padding:5px 8px;font-weight:700;font-size:11px">المجموع — انقر بالزر الأيمن على أي خلية لتغيير التجميع</td>'
+    +qfFootCell('sq-table',7,'sum')
+    +qfFootCell('sq-table',8,'sum')
+    +qfFootCell('sq-table',9,'none')
+    +qfFootCell('sq-table',10,'sum')
+    +qfFootCell('sq-table',11,'none')
+    +qfFootCell('sq-table',12,'sum')
+    +'<td style="background:#4a1942"></td><td style="background:#4a1942"></td><td style="background:#4a1942"></td>'
+    +'</tr></tfoot>'
     +'</tbody></table></div>'
     +'</div>';
+  setTimeout(function(){updateQtyFooter('sq-table');},80);
 }
 
 // ── كشف كميات المورد ─────────────────────────────────────────────
