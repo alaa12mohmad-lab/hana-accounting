@@ -744,6 +744,30 @@ window.handleSarkiExcelFile = function(file){
 
 
 <script>
+/* ══ Core modal functions (fallback if router.js cache issue) ═══ */
+function closeModal(){
+  var ov=document.getElementById('modal-overlay');
+  if(ov) ov.style.display='none';
+  document.body.style.overflow='';
+}
+function openModal(title,body,footer,cls){
+  var ov=document.getElementById('modal-overlay');
+  var mc=document.getElementById('modal-box');
+  var mt=document.getElementById('modal-title');
+  var mb=document.getElementById('modal-body');
+  var mf=document.getElementById('modal-foot');
+  if(!ov) return;
+  if(mt) mt.textContent=title||'';
+  if(mb) mb.innerHTML=body||'';
+  if(mf) mf.innerHTML=footer||'';
+  if(mc) mc.className='modal '+(cls||'modal-lg');
+  ov.style.display='flex';
+  document.body.style.overflow='hidden';
+}
+function closeModalOnBg(e){
+  if(e.target===document.getElementById('modal-overlay')) closeModal();
+}
+
 /* ══ Override buildSkThead to ensure رقم is sortable ═══════════ */
 function buildSkThead(){
   var cols = [
