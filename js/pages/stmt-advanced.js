@@ -460,7 +460,8 @@ function renderSupplierQty(){
     +'</div>'
 
     +'<div class="tbl-wrap"><table id="sq-table">'
-    +'<thead><tr>'
+    +'<thead>'
+    +'<tr>'
     +'<th>الحافظة</th><th>التاريخ</th><th>العميل</th><th>المورد</th>'
     +'<th>الخامة</th><th>السيارة</th><th>السائق</th>'
     +'<th style="background:#4a1942;color:#fff">نقلات</th>'
@@ -469,15 +470,32 @@ function renderSupplierQty(){
     +'<th>م³ صافي</th>'
     +'<th style="background:#4a1942;color:#fff">سعر الشراء</th>'
     +'<th>إجمالي التكلفة</th>'
-    +'<th style="background:#064e3b;color:#fff" title="المحفوظ في الحافظة">محفوظ</th>'
+    +'<th style="background:#064e3b;color:#fff">محفوظ</th>'
     +'<th>الحالة</th><th>حفظ</th>'
-    +'</tr></thead>'
+    +'</tr>'
+    +'<tr>'
+    +qfInput("sq-table",0,"# حافظة")
+    +qfInput("sq-table",1,"تاريخ")
+    +qfInput("sq-table",2,"عميل")
+    +qfInput("sq-table",3,"مورد")
+    +qfInput("sq-table",4,"خامة")
+    +qfInput("sq-table",5,"سيارة")
+    +qfInput("sq-table",6,"سائق")
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"></th>'
+    +'<th style="padding:2px;background:#f8fafc"><button onclick="clearQtyFilter(\'sq-table\')" style="font-size:9px;padding:2px 5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;cursor:pointer">✕</button></th>'
+    +'</tr>'
+    +'</thead>'
     +'<tbody>'
     +(rows.length===0
       ? '<tr><td colspan="16" class="tbl-empty"><span class="tbl-empty-icon">📦</span>لا توجد بيانات — اختر مورداً أو غيّر الفلتر</td></tr>'
       : rows.map(function(r){
           var net  = Math.max(0, r.trips*r.cubicBuy - r.discountM);
-          // Use stored buyTotal if available and buyPrice is 0
           var tot  = r.buyPrice > 0 ? net * r.buyPrice : r.buyTotal;
           return '<tr>'
             +'<td><a href="#" onclick="openSarkiModal('+r.skId+');return false" style="color:#dc2626;font-weight:700">#'+r.skId+'</a></td>'
@@ -487,137 +505,18 @@ function renderSupplierQty(){
             +'<td class="text-xs">'+r.material+'</td>'
             +'<td class="text-xs">'+r.plateNo+'</td>'
             +'<td class="text-xs">'+r.driverName+'</td>'
-            +'<td><input type="number" min="0" value="'+r.trips+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="trips"'
-            +' onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #e2e8f0;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
-            +'<td><input type="number" min="0" step="0.01" value="'+r.cubicBuy+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="cubicBuy"'
-            +' onchange="updateQtyCell(this)" style="width:60px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
-            +'<td><input type="number" min="0" step="0.01" value="'+r.discountM+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="discountM"'
-            +' onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #dc2626;border-radius:4px;padding:2px 4px;font-family:inherit;color:#dc2626"></td>'
+            +'<td><input type="number" min="0" value="'+r.trips+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="trips" onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #e2e8f0;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
+            +'<td><input type="number" min="0" step="0.01" value="'+r.cubicBuy+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="cubicBuy" onchange="updateQtyCell(this)" style="width:60px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
+            +'<td><input type="number" min="0" step="0.01" value="'+r.discountM+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="discountM" onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #dc2626;border-radius:4px;padding:2px 4px;font-family:inherit;color:#dc2626"></td>'
             +'<td class="font-bold text-center" id="net-s-'+r.skId+'-'+r.lineIdx+'">'+net.toFixed(1)+'</td>'
-            +'<td><input type="number" min="0" step="0.01" value="'+r.buyPrice+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="buyPrice"'
-            +' onchange="updateQtyCell(this)" style="width:65px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
+            +'<td><input type="number" min="0" step="0.01" value="'+r.buyPrice+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="buyPrice" onchange="updateQtyCell(this)" style="width:65px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
             +'<td class="font-bold text-center" style="color:#dc2626" id="tot-s-'+r.skId+'-'+r.lineIdx+'">'+curr(tot)+'</td>'
-            +'<td class="text-center text-xs" style="color:'+(Math.abs(tot-r.buyTotal)<1?'#16a34a':'#d97706')+'" title="المخزون='+curr(r.buyTotal)+'">'
+            +'<td class="text-center text-xs" style="color:'+(Math.abs(tot-r.buyTotal)<1?'#16a34a':'#d97706')+'">'
             +(Math.abs(tot-r.buyTotal)<1?'✓':curr(r.buyTotal))+'</td>'
             +'<td>'+statusBadge(r.status)+'</td>'
-            +'<td><button class="btn btn-xs" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-mode="supplier"'
-            +' onclick="saveQtyRow(this)" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit">💾</button></td>'
+            +'<td><button class="btn btn-xs" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-mode="supplier" onclick="saveQtyRow(this)" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit">💾</button></td>'
             +'</tr>';
         }).join(''))
     +'</tbody></table></div>'
     +'</div>';
-}
-
-// ── Update cell live preview ──────────────────────────────────────
-window.updateQtyCell = function(input){
-  var sk    = input.getAttribute('data-sk');
-  var li    = input.getAttribute('data-li');
-  var field = input.getAttribute('data-field');
-  var val   = Number(input.value)||0;
-
-  // Mark row as modified
-  var row = input.closest('tr');
-  if(row) row.style.background = 'rgba(255,200,0,.08)';
-
-  // Recalculate preview for client row
-  var trips = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="trips"]')?.value)||0;
-  var cSell = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="cubicSell"]')?.value)||0;
-  var cBuy  = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="cubicBuy"]')?.value)||0;
-  var disc  = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="discountM"]')?.value)||0;
-  var sPrice= Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="sellPrice"]')?.value)||0;
-  var bPrice= Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="buyPrice"]')?.value)||0;
-
-  // Update net and total preview
-  var netC = document.getElementById('net-c-'+sk+'-'+li);
-  var totC = document.getElementById('tot-c-'+sk+'-'+li);
-  var netS = document.getElementById('net-s-'+sk+'-'+li);
-  var totS = document.getElementById('tot-s-'+sk+'-'+li);
-
-  if(cSell && netC){ var nc=Math.max(0,trips*cSell-disc); netC.textContent=nc.toFixed(1); if(totC) totC.textContent=curr(nc*sPrice); }
-  if(cBuy  && netS){ var nb=Math.max(0,trips*cBuy-disc);  netS.textContent=nb.toFixed(1); if(totS) totS.textContent=curr(nb*bPrice); }
-};
-
-// ── Save row back to sarkis ───────────────────────────────────────
-window.saveQtyRow = function(btn){
-  var skId  = Number(btn.getAttribute('data-sk'));
-  var li    = Number(btn.getAttribute('data-li'));
-  var mode  = btn.getAttribute('data-mode'); // 'client' or 'supplier'
-
-  var sk = DB.getById('sarkis', skId);
-  if(!sk){ toast('الحافظة غير موجودة','error'); return; }
-
-  var lines = sk.lines ? sk.lines.slice() : [];
-  if(!lines[li]){ toast('السطر غير موجود','error'); return; }
-
-  var line = Object.assign({}, lines[li]);
-
-  // Read values from inputs
-  var trips  = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="trips"]')?.value)||0;
-  var disc   = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountM"]')?.value)||0;
-
-  line.trips    = trips;
-  line.discountM= disc;
-
-  if(mode==='client'){
-    var cSell  = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="cubicSell"]')?.value)||0;
-    var sPrice = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="sellPrice"]')?.value)||0;
-    line.cubicSell = cSell;
-    line.sellPrice = sPrice;
-  } else {
-    var cBuy   = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="cubicBuy"]')?.value)||0;
-    var bPrice = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="buyPrice"]')?.value)||0;
-    line.cubicBuy  = cBuy;
-    line.buyPrice  = bPrice;
-  }
-
-  // Recalculate line
-  line = calcLine(line);
-  lines[li] = line;
-
-  // Recalculate sarkis totals
-  var totals = calcSarkiTotals(lines);
-
-  DB.update('sarkis', skId, Object.assign({}, sk, {
-    lines:        lines,
-    totalSell:    totals.totalSell,
-    totalBuy:     totals.totalBuy,
-    totalProfit:  totals.totalProfit,
-    totalTrips:   totals.totalTrips,
-  }));
-
-  // Visual feedback
-  var row = btn.closest('tr');
-  if(row){
-    row.style.background = 'rgba(22,163,74,.1)';
-    setTimeout(function(){ row.style.background = ''; }, 1500);
-  }
-  toast('✅ تم تحديث الحافظة #'+skId);
-};
-
-// ── Print functions ───────────────────────────────────────────────
-function printClientQty(){
-  var tbl = document.getElementById('cq-table');
-  if(!tbl){ toast('لا توجد بيانات للطباعة','error'); return; }
-  // Clone table and remove edit columns
-  var clone = tbl.cloneNode(true);
-  // Remove input fields - replace with values
-  clone.querySelectorAll('input').forEach(function(inp){
-    var td = inp.closest('td');
-    if(td){ td.innerHTML = '<span>'+inp.value+'</span>'; }
-  });
-  // Remove save column
-  clone.querySelectorAll('th:last-child, td:last-child').forEach(function(el){ el.remove(); });
-  _pw('كشف كميات العميل', printHeaderHTML()+'<br>'+clone.outerHTML);
-}
-
-function printSupplierQty(){
-  var tbl = document.getElementById('sq-table');
-  if(!tbl){ toast('لا توجد بيانات للطباعة','error'); return; }
-  var clone = tbl.cloneNode(true);
-  clone.querySelectorAll('input').forEach(function(inp){
-    var td = inp.closest('td');
-    if(td){ td.innerHTML = '<span>'+inp.value+'</span>'; }
-  });
-  clone.querySelectorAll('th:last-child, td:last-child').forEach(function(el){ el.remove(); });
-  _pw('كشف كميات المورد', printHeaderHTML()+'<br>'+clone.outerHTML);
 }
