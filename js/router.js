@@ -55,7 +55,11 @@ function badge(t,c='blue'){
 }
 function statusBadge(s){
   const m={'مفتوح':'yellow','معتمد':'green','ملغي':'red','معلق':'yellow',
-           'تم الصرف':'green','مرتجع':'red','تحصيل':'green','دفع':'red','يدوي':'blue'};
+           'تم الصرف':'green','مرتجع':'red',
+           'تحصيل':'green','تحصيل يدوي':'teal',
+           'دفع':'red','دفع يدوي':'pink',
+           'يدوي':'blue','فاتورة':'orange','فاتورة شراء':'purple',
+           'رصيد أول المدة':'gray'};
   return badge(s, m[s]||'gray');
 }
 function toast(msg,type='success'){
