@@ -287,6 +287,7 @@ function renderRunningBal(){
     +'<input type="date" value="'+to+'" data-pg="running-bal" onchange="window._RB_TO=this.value;nav(this.dataset.pg)"></div>'
     +'<button class="btn btn-gray btn-sm" data-pg="running-bal" onclick="window._RB_CLIENT=\'\';window._RB_FROM=\'\';window._RB_TO=\'\';nav(this.dataset.pg)">✕ مسح</button>'
     +'<button class="btn btn-gray btn-sm" onclick="printRunningBal()">🖨️ طباعة</button>'
+    +'<button class="btn btn-gray btn-sm" onclick="exportRunningBalExcel()">📊 Excel</button>'
     +'</div></div>'
     +(selEntity && rows.length===0
       ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">📭</div><p class="text-gray mt8">لا توجد حركات</p></div>'
@@ -356,6 +357,7 @@ function renderNotes(){
     +'<div class="form-group" style="margin:0"><label style="font-size:10px">عرض الأرصدة أعلى من</label>'
     +'<input type="number" min="0" step="100" value="'+threshold+'" data-pg="notes" onchange="window._NT_THRESH=this.value;nav(this.dataset.pg)" style="width:130px"></div>'
     +'<button class="btn btn-gray btn-sm" onclick="printNotes()">🖨️ طباعة الكل</button>'
+    +'<button class="btn btn-gray btn-sm" onclick="exportNotesExcel()">📊 Excel</button>'
     +'</div></div>'
     +'<div class="alert alert-blue mb12" style="font-size:11px">'
     +'<span>📊</span><div>إجمالي المديونية: <strong>'+curr(total)+'</strong> — '
@@ -476,6 +478,7 @@ function renderClientQty(){
     +'<input type="date" value="'+selTo+'" onchange="window._CQ_TO=this.value;nav(\'clientQty\')"></div>'
     +'<button class="btn btn-gray btn-sm" onclick="window._CQ_CLIENT=\'\';window._CQ_FROM=\'\';window._CQ_TO=\'\';nav(\'clientQty\')">✕ مسح</button>'
     +'<button class="btn btn-gray btn-sm" onclick="printClientQty()">🖨️ طباعة</button>'
+    +'<button class="btn btn-gray btn-sm" onclick="exportClientQtyExcel()">📊 Excel</button>'
     +'</div></div>'
 
     // KPIs
@@ -620,6 +623,7 @@ function renderSupplierQty(){
     +'<input type="date" value="'+selTo+'" onchange="window._SQ_TO=this.value;nav(\'supplierQty\')"></div>'
     +'<button class="btn btn-gray btn-sm" onclick="window._SQ_SUPP=\'\';window._SQ_FROM=\'\';window._SQ_TO=\'\';nav(\'supplierQty\')">✕ مسح</button>'
     +'<button class="btn btn-gray btn-sm" onclick="printSupplierQty()">🖨️ طباعة</button>'
+    +'<button class="btn btn-gray btn-sm" onclick="exportSupplierQtyExcel()">📊 Excel</button>'
     +'</div></div>'
 
     +'<div class="grid3 mb12" style="gap:8px">'
@@ -804,4 +808,257 @@ function printSupplierQty(){
   });
   clone.querySelectorAll('th:last-child,td:last-child').forEach(function(el){ el.remove(); });
   _pw('كشف كميات المورد', printHeaderHTML()+clone.outerHTML);
+}
+
+// ══ EXCEL EXPORT FUNCTIONS ════════════════════════════════════════
+
+function xlsxExport(sheetData, filename, sheetName){
+  if(typeof XLSX === 'undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  // Auto column widths
+  var colWidths = sheetData[0].map(function(_,ci){
+    var max = 10;
+    sheetData.forEach(function(row){
+      var cell = row[ci] ? String(row[ci]).length : 0;
+      if(cell > max) max = cell;
+    });
+    return {wch: Math.min(max+2, 40)};
+  });
+  ws['!cols'] = colWidths;
+
+  // Style header row
+  var range = XLSX.utils.decode_range(ws['!ref']);
+  for(var C=range.s.c; C<=range.e.c; C++){
+    var addr = XLSX.utils.encode_cell({r:0,c:C});
+    if(!ws[addr]) continue;
+    ws[addr].s = {font:{bold:true}, fill:{fgColor:{rgb:'1F4E78'}}, font:{color:{rgb:'FFFFFF'},bold:true}};
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, sheetName||'بيانات');
+  XLSX.writeFile(wb, filename+'.xlsx');
+  toast('✅ تم تصدير '+filename+'.xlsx');
+}
+
+// ── كشف الحساب المتحرك → Excel ──────────────────────────────────
+function exportRunningBalExcel(){
+  var selType   = window._RB_TYPE   || 'client';
+  var selEntity = window._RB_CLIENT || '';
+  var from      = window._RB_FROM   || '';
+  var to        = window._RB_TO     || '';
+  if(!selEntity){ toast('اختر العميل أو المورد أولاً','error'); return; }
+
+  var co = DB.getCompany();
+  var rows = [];
+  var runBal = 0;
+  var txns = [];
+
+  if(selType==='client'){
+    var cust = DB.getAll('customers').find(function(c){ return c.name===selEntity; });
+    var ob = Number(cust?.openingBalance)||0;
+    runBal = ob;
+    if(ob!==0) txns.push({date:'',type:'رصيد أول المدة',desc:'رصيد افتتاحي',debit:ob>0?ob:0,credit:ob<0?Math.abs(ob):0});
+    DB.getAll('sarkis').filter(function(sk){
+      return sk.client===selEntity&&sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to);
+    }).forEach(function(sk){
+      txns.push({date:sk.date,type:'فاتورة',desc:'حافظة #'+sk.id+' — '+sk.material,
+        debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id});
+    });
+    DB.getAll('journal').filter(function(j){
+      return j.party===selEntity&&j.partyType==='عميل'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to);
+    }).forEach(function(j){
+      if(j.entryType==='تحصيل')
+        txns.push({date:j.date,type:'تحصيل',desc:j.description||'تحصيل',debit:0,credit:Number(j.amount)||0});
+      else if(j.entryType==='يدوي'&&j.creditCode==='1010')
+        txns.push({date:j.date,type:'تحصيل يدوي',desc:j.description||'قيد يدوي',debit:0,credit:Number(j.creditAmount)||0});
+    });
+  } else {
+    var supp = DB.getAll('suppliers').find(function(s){ return s.name===selEntity; });
+    var ob2 = Number(supp?.openingBalance)||0;
+    runBal = ob2;
+    if(ob2!==0) txns.push({date:'',type:'رصيد أول المدة',desc:'رصيد افتتاحي',debit:0,credit:ob2>0?ob2:0});
+    DB.getAll('sarkis').filter(function(sk){
+      return sk.supplier===selEntity&&sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to);
+    }).forEach(function(sk){
+      txns.push({date:sk.date,type:'فاتورة شراء',desc:'حافظة #'+sk.id+' — '+sk.material,
+        debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id});
+    });
+    DB.getAll('journal').filter(function(j){
+      return j.party===selEntity&&j.partyType==='مورد'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to);
+    }).forEach(function(j){
+      if(j.entryType==='دفع')
+        txns.push({date:j.date,type:'دفع',desc:j.description||'دفع',debit:Number(j.amount)||0,credit:0});
+      else if(j.entryType==='يدوي'&&j.debitCode==='2001')
+        txns.push({date:j.date,type:'دفع يدوي',desc:j.description||'قيد يدوي',debit:Number(j.debitAmount)||0,credit:0});
+    });
+  }
+
+  txns.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
+
+  var header = [
+    [co.name||'شركة الهنا للنقل','','','','كشف الحساب المتحرك','',''],
+    [selEntity,'','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم'),''],
+    [],
+    ['التاريخ','النوع','البيان','المرجع','مدين','دائن','الرصيد'],
+  ];
+
+  var dataRows = txns.map(function(t){
+    runBal += t.debit - t.credit;
+    return [
+      t.date ? t.date.split('-').reverse().join('/') : '—',
+      t.type,
+      t.desc,
+      t.ref||'',
+      t.debit||'',
+      t.credit||'',
+      runBal,
+    ];
+  });
+
+  var totDebit  = txns.reduce(function(s,t){ return s+t.debit; },0);
+  var totCredit = txns.reduce(function(s,t){ return s+t.credit; },0);
+  var footer = [['','','','الإجمالي',totDebit,totCredit,runBal]];
+
+  xlsxExport(header.concat(dataRows).concat(footer),
+    'كشف_حساب_'+selEntity, 'كشف الحساب');
+}
+
+// ── كشف كميات العميل → Excel ─────────────────────────────────────
+function exportClientQtyExcel(){
+  var selClient = window._CQ_CLIENT || '';
+  var from      = window._CQ_FROM   || '';
+  var to        = window._CQ_TO     || '';
+  var co = DB.getCompany();
+
+  var rows = [];
+  DB.getAll('sarkis').forEach(function(sk){
+    if(selClient && sk.client!==selClient) return;
+    if(from && sk.date<from) return;
+    if(to   && sk.date>to)   return;
+    (sk.lines||[]).forEach(function(ln,li){
+      var cubicSell = ln.cubicSell!=null?Number(ln.cubicSell):Number(ln.cubicPerTrip)||0;
+      var disc      = Number(ln.discountM)||0;
+      var trips     = Number(ln.trips)||0;
+      var net       = Math.max(0, trips*cubicSell-disc);
+      var sellPrice = Number(ln.sellPrice)||0;
+      rows.push([
+        '#'+sk.id, sk.date?sk.date.split('-').reverse().join('/'):'',
+        sk.client, sk.supplier, sk.material,
+        ln.plateNo||'', ln.driverName||'',
+        trips, cubicSell, disc, net, sellPrice, net*sellPrice,
+        sk.status||'',
+      ]);
+    });
+  });
+  rows.sort(function(a,b){ return (b[1]||'').localeCompare(a[1]||''); });
+
+  var header = [
+    [co.name||'شركة الهنا للنقل','','','','','كشف كميات العميل','','','','','','','',''],
+    [selClient||'كل العملاء','','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم'),'','','','','','','',''],
+    [],
+    ['الحافظة','التاريخ','العميل','المورد','الخامة','السيارة','السائق',
+     'نقلات','م³عميل','خصم م','م³ صافي','سعر البيع','إجمالي البيع','الحالة'],
+  ];
+
+  // Totals row
+  var totRow = ['','','','','','','الإجمالي',
+    rows.reduce(function(s,r){return s+r[7];},0),
+    '', '',
+    rows.reduce(function(s,r){return s+r[10];},0),
+    '',
+    rows.reduce(function(s,r){return s+r[12];},0),
+    '',
+  ];
+
+  xlsxExport(header.concat(rows).concat([totRow]),
+    'كشف_كميات_عميل'+(selClient?'_'+selClient:''), 'كميات العميل');
+}
+
+// ── كشف كميات المورد → Excel ─────────────────────────────────────
+function exportSupplierQtyExcel(){
+  var selSupp = window._SQ_SUPP || '';
+  var from    = window._SQ_FROM || '';
+  var to      = window._SQ_TO   || '';
+  var co = DB.getCompany();
+
+  var rows = [];
+  DB.getAll('sarkis').forEach(function(sk){
+    if(selSupp && sk.supplier!==selSupp) return;
+    if(from && sk.date<from) return;
+    if(to   && sk.date>to)   return;
+    (sk.lines||[]).forEach(function(ln,li){
+      var cubicBuy = ln.cubicBuy!=null?Number(ln.cubicBuy):Number(ln.cubicPerTrip)||0;
+      var disc     = Number(ln.discountM)||0;
+      var trips    = Number(ln.trips)||0;
+      var net      = Math.max(0, trips*cubicBuy-disc);
+      var buyPrice = Number(ln.buyPrice)||0;
+      var stored   = Number(ln.buyTotal)||0;
+      rows.push([
+        '#'+sk.id, sk.date?sk.date.split('-').reverse().join('/'):'',
+        sk.client, sk.supplier, sk.material,
+        ln.plateNo||'', ln.driverName||'',
+        trips, cubicBuy, disc, net, buyPrice,
+        buyPrice>0?net*buyPrice:stored, stored, sk.status||'',
+      ]);
+    });
+  });
+  rows.sort(function(a,b){ return (b[1]||'').localeCompare(a[1]||''); });
+
+  var header = [
+    [co.name||'شركة الهنا للنقل','','','','','كشف كميات المورد','','','','','','','','',''],
+    [selSupp||'كل الموردين','','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم'),'','','','','','','','',''],
+    [],
+    ['الحافظة','التاريخ','العميل','المورد','الخامة','السيارة','السائق',
+     'نقلات','م³مورد','خصم م','م³ صافي','سعر الشراء','إجمالي التكلفة','محفوظ','الحالة'],
+  ];
+
+  var totRow = ['','','','','','','الإجمالي',
+    rows.reduce(function(s,r){return s+r[7];},0),
+    '', '',
+    rows.reduce(function(s,r){return s+r[10];},0),
+    '',
+    rows.reduce(function(s,r){return s+r[12];},0),
+    rows.reduce(function(s,r){return s+r[13];},0),
+    '',
+  ];
+
+  xlsxExport(header.concat(rows).concat([totRow]),
+    'كشف_كميات_مورد'+(selSupp?'_'+selSupp:''), 'كميات المورد');
+}
+
+// ── إشعارات المديونية → Excel ────────────────────────────────────
+function exportNotesExcel(){
+  var threshold = Number(window._NT_THRESH)||0;
+  var co = DB.getCompany();
+
+  var rows = DB.getAll('customers').map(function(c){
+    var ob    = Number(c.openingBalance)||0;
+    var sells = DB.getAll('sarkis').filter(function(s){return s.client===c.name&&s.status!=='ملغي';})
+                  .reduce(function(t,s){return t+(Number(s.totalSell)||0);},0);
+    var colls = DB.getAll('journal').filter(function(j){return j.entryType==='تحصيل'&&j.party===c.name;})
+                  .reduce(function(t,j){return t+(Number(j.amount)||0);},0);
+    var bal = ob+sells-colls;
+    return {name:c.name,phone:c.phone||'',sells:sells,colls:colls,bal:bal};
+  }).filter(function(c){return c.bal>threshold;})
+    .sort(function(a,b){return b.bal-a.bal;});
+
+  var header = [
+    [co.name||'شركة الهنا للنقل','','','كشف المديونيات',''],
+    ['الأرصدة أعلى من: '+threshold+' ج.م','','','',''],
+    [],
+    ['م','العميل','الهاتف','إجمالي المبيعات','إجمالي التحصيل','الرصيد المدين'],
+  ];
+
+  var dataRows = rows.map(function(c,i){
+    return [i+1, c.name, c.phone, c.sells, c.colls, c.bal];
+  });
+
+  var totRow = ['','الإجمالي','',
+    rows.reduce(function(s,c){return s+c.sells;},0),
+    rows.reduce(function(s,c){return s+c.colls;},0),
+    rows.reduce(function(s,c){return s+c.bal;},0),
+  ];
+
+  xlsxExport(header.concat(dataRows).concat([totRow]), 'كشف_المديونيات', 'المديونيات');
 }
