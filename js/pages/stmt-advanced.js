@@ -215,10 +215,18 @@ function renderRunningBal(){
         txns.push({date:sk.date,type:'فاتورة',desc:'حافظة #'+sk.id+' — '+sk.material,debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id});
       });
       DB.getAll('journal').filter(function(j){
-        return j.entryType==='تحصيل' && j.party===selEntity
+        return j.party===selEntity && j.partyType==='عميل'
           && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
       }).forEach(function(j){
-        txns.push({date:j.date,type:'تحصيل',desc:j.description||'تحصيل نقدي',debit:0,credit:Number(j.amount)||0});
+        if(j.entryType==='تحصيل'){
+          // تحصيل مباشر
+          txns.push({date:j.date,type:'تحصيل',desc:j.description||'تحصيل نقدي',
+            debit:0, credit:Number(j.amount)||0});
+        } else if(j.entryType==='يدوي' && j.creditCode==='1010'){
+          // قيد يدوي يضع ذمم العملاء دائن = تحصيل
+          txns.push({date:j.date,type:'تحصيل يدوي',desc:j.description||'قيد يدوي',
+            debit:0, credit:Number(j.creditAmount)||0});
+        }
       });
       txns.sort(function(a,b){ return a.date.localeCompare(b.date); });
       rows = txns.map(function(t){ runBal+=t.debit-t.credit; return Object.assign({},t,{balance:runBal}); });
@@ -237,10 +245,18 @@ function renderRunningBal(){
         txns2.push({date:sk.date,type:'فاتورة شراء',desc:'حافظة #'+sk.id+' — '+sk.material,debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id});
       });
       DB.getAll('journal').filter(function(j){
-        return j.entryType==='دفع' && j.party===selEntity
+        return j.party===selEntity && j.partyType==='مورد'
           && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
       }).forEach(function(j){
-        txns2.push({date:j.date,type:'دفع',desc:j.description||'دفع نقدي',debit:Number(j.amount)||0,credit:0});
+        if(j.entryType==='دفع'){
+          // دفع مباشر
+          txns2.push({date:j.date,type:'دفع',desc:j.description||'دفع نقدي',
+            debit:Number(j.amount)||0, credit:0});
+        } else if(j.entryType==='يدوي' && j.debitCode==='2001'){
+          // قيد يدوي يخصم ذمم الموردين = دفع
+          txns2.push({date:j.date,type:'دفع يدوي',desc:j.description||'قيد يدوي',
+            debit:Number(j.debitAmount)||0, credit:0});
+        }
       });
       txns2.sort(function(a,b){ return a.date.localeCompare(b.date); });
       rows = txns2.map(function(t){ runBal+=t.debit-t.credit; return Object.assign({},t,{balance:runBal}); });
