@@ -213,16 +213,28 @@ function excelDateToStr(val){
 function getCustomerBalance(name){
   const c=DB.getAll('customers').find(x=>x.name===name);
   const ob=Number(c?.openingBalance)||0;
-  const sells=DB.getAll('sarkis').filter(s=>s.client===name&&s.status!=='ملغي').reduce((t,s)=>t+(Number(s.totalSell)||0),0);
-  const colls=DB.getAll('journal').filter(j=>j.entryType==='تحصيل'&&j.party===name).reduce((t,j)=>t+(Number(j.amount)||0),0);
-  return ob+sells-colls;
+  const sells=DB.getAll('sarkis').filter(s=>s.client===name&&s.status!=='ملغي')
+    .reduce((t,s)=>t+(Number(s.totalSell)||0),0);
+  const jEntries = DB.getAll('journal').filter(j=>j.party===name&&j.partyType==='عميل');
+  // تحصيل مباشر (زر تحصيل من عميل)
+  const colls=jEntries.filter(j=>j.entryType==='تحصيل').reduce((t,j)=>t+(Number(j.amount)||0),0);
+  // قيد يدوي يخصم ذمم العملاء (دائن 1010)
+  const manualColls=jEntries.filter(j=>j.entryType==='يدوي'&&j.creditCode==='1010')
+    .reduce((t,j)=>t+(Number(j.creditAmount)||0),0);
+  return ob+sells-colls-manualColls;
 }
 function getSupplierBalance(name){
   const s=DB.getAll('suppliers').find(x=>x.name===name);
   const ob=Number(s?.openingBalance)||0;
-  const buys=DB.getAll('sarkis').filter(sk=>sk.supplier===name&&sk.status!=='ملغي').reduce((t,sk)=>t+(Number(sk.totalBuy)||0),0);
-  const pmts=DB.getAll('journal').filter(j=>j.entryType==='دفع'&&j.party===name).reduce((t,j)=>t+(Number(j.amount)||0),0);
-  return ob+buys-pmts;
+  const buys=DB.getAll('sarkis').filter(sk=>sk.supplier===name&&sk.status!=='ملغي')
+    .reduce((t,sk)=>t+(Number(sk.totalBuy)||0),0);
+  const jEntries = DB.getAll('journal').filter(j=>j.party===name&&j.partyType==='مورد');
+  // دفع مباشر (زر دفع للمورد)
+  const pmts=jEntries.filter(j=>j.entryType==='دفع').reduce((t,j)=>t+(Number(j.amount)||0),0);
+  // قيد يدوي يخصم ذمم الموردين (مدين 2001)
+  const manualPmts=jEntries.filter(j=>j.entryType==='يدوي'&&j.debitCode==='2001')
+    .reduce((t,j)=>t+(Number(j.debitAmount)||0),0);
+  return ob+buys-pmts-manualPmts;
 }
 function getCustomerPrice(customerName, materialName, date){
   const c=DB.getAll('customers').find(x=>x.name===customerName);
@@ -257,8 +269,14 @@ function creditAccount(payType){
 }
 
 // ── Confirm delete helper ─────────────────────────────────────────
-function confirmDelete(msg){
-  return window.confirm(msg||'هل تريد الحذف؟');
+function confirmDelete(msg, cb){
+  if(typeof cb === 'function'){
+    // Callback pattern: confirmDelete('message', ()=>{...})
+    if(window.confirm(msg||'هل تريد الحذف؟')) cb();
+  } else {
+    // Return value pattern: if(confirmDelete('message'))
+    return window.confirm(msg||'هل تريد الحذف؟');
+  }
 }
 
 // ── Show auth error helper ────────────────────────────────────────
