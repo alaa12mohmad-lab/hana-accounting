@@ -817,24 +817,22 @@ function xlsxExport(sheetData, filename, sheetName){
   var wb = XLSX.utils.book_new();
   var ws = XLSX.utils.aoa_to_sheet(sheetData);
 
-  // Auto column widths
-  var colWidths = sheetData[0].map(function(_,ci){
-    var max = 10;
-    sheetData.forEach(function(row){
-      var cell = row[ci] ? String(row[ci]).length : 0;
-      if(cell > max) max = cell;
+  // Auto column widths based on content
+  if(sheetData.length > 0){
+    var colWidths = sheetData[0].map(function(_,ci){
+      var max = 8;
+      sheetData.forEach(function(row){
+        if(row[ci]===undefined||row[ci]===null) return;
+        var len = String(row[ci]).length;
+        if(len > max) max = len;
+      });
+      return {wch: Math.min(max+2, 45)};
     });
-    return {wch: Math.min(max+2, 40)};
-  });
-  ws['!cols'] = colWidths;
-
-  // Style header row
-  var range = XLSX.utils.decode_range(ws['!ref']);
-  for(var C=range.s.c; C<=range.e.c; C++){
-    var addr = XLSX.utils.encode_cell({r:0,c:C});
-    if(!ws[addr]) continue;
-    ws[addr].s = {font:{bold:true}, fill:{fgColor:{rgb:'1F4E78'}}, font:{color:{rgb:'FFFFFF'},bold:true}};
+    ws['!cols'] = colWidths;
   }
+
+  // Freeze top rows (header area)
+  ws['!freeze'] = {xSplit:0, ySplit:4, topLeftCell:'A5', activePane:'bottomLeft'};
 
   XLSX.utils.book_append_sheet(wb, ws, sheetName||'بيانات');
   XLSX.writeFile(wb, filename+'.xlsx');
