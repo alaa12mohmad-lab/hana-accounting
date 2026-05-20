@@ -114,6 +114,7 @@ function viewAcctStatement(id){
       </tbody>
     </table></div>`,
     `<button class="btn btn-gray" onclick="closeModal()">إغلاق</button>
+     <button class="btn btn-gray" onclick="exportAcctStatementExcel(${id})">📊 Excel</button>
      <button class="btn btn-primary" onclick="printAcctStatement(${id})">🖨️ طباعة</button>`,
     'modal-xl');
 }
@@ -184,3 +185,101 @@ function delAcct(id,name){confirmDelete(`حذف حساب "${name}"؟`,()=>{DB.re
 // ═══════════════════════════════════════════════════════
 function renderCustomers(){ return renderPartyPage('customers','العملاء','👥','عميل'); }
 function renderSuppliers(){ return renderPartyPage('suppliers','الموردون','🏗️','مورد'); }
+// ── Excel Export: Account Statement ──────────────────────────────
+function exportAcctStatementExcel(id){
+  if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
+  const acct=DB.getById('accounts',id);
+  if(!acct) return;
+  const co=DB.getCompany();
+
+  const jrn=DB.getAll('journal').sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const debitTypes=['أصول','مصروفات'];
+  const isDebit=debitTypes.includes(acct.type);
+  let running=Number(acct.openingBalance)||0;
+  const rows=[];
+  jrn.forEach(j=>{
+    let affect=0,side='';
+    if(j.entryType==='يدوي'){
+      if(j.debitCode===acct.code){affect=Number(j.debitAmount)||0;side='مدين';}
+      else if(j.creditCode===acct.code){affect=Number(j.creditAmount)||0;side='دائن';}
+    } else {
+      const amt=Number(j.amount)||0;
+      if(j.debitCode===acct.code){affect=amt;side='مدين';}
+      else if(j.creditCode===acct.code){affect=amt;side='دائن';}
+    }
+    if(!affect)return;
+    const change=isDebit?(side==='مدين'?affect:-affect):(side==='دائن'?affect:-affect);
+    running+=change;
+    rows.push({...j,affect,side,running});
+  });
+
+  const totDebit =rows.filter(r=>r.side==='مدين').reduce((s,r)=>s+r.affect,0);
+  const totCredit=rows.filter(r=>r.side==='دائن').reduce((s,r)=>s+r.affect,0);
+
+  // Build sheet data
+  const today=new Date().toLocaleDateString('ar-EG');
+  const data=[
+    // Company header
+    [co.name||'شركة الهنا للنقل','','','','','',''],
+    ['كشف حساب: '+acct.code+' — '+acct.name,'','','','','',''],
+    ['تاريخ التصدير: '+today,'','','','','',''],
+    [],
+    // KPIs
+    ['الرصيد الافتتاحي','حركات مدينة','حركات دائنة','صافي الحركة','الرصيد الحالي','',''],
+    [
+      Number(acct.openingBalance)||0,
+      totDebit,
+      totCredit,
+      totDebit-totCredit,
+      running,
+      '','',
+    ],
+    [],
+    // Table header
+    ['التاريخ','نوع القيد','الجهة','البيان','الجهة المقابلة','مدين','دائن','الرصيد'],
+    // Opening row
+    ['','رصيد أول المدة','','','','','',Number(acct.openingBalance)||0],
+  ];
+
+  // Data rows
+  rows.forEach(r=>{
+    const counterAcct=r.side==='مدين'?(r.creditCode+' '+r.creditName):(r.debitCode+' '+r.debitName);
+    data.push([
+      r.date?r.date.split('-').reverse().join('/'):'-',
+      r.entryType,
+      r.party||'-',
+      r.description||'-',
+      counterAcct||'-',
+      r.side==='مدين'?r.affect:0,
+      r.side==='دائن'?r.affect:0,
+      r.running,
+    ]);
+  });
+
+  // Closing row
+  data.push(['','رصيد آخر المدة','','','','','' ,running]);
+  data.push([]);
+  // Summary
+  data.push(['ملخص','','','','','','','']);
+  data.push(['إجمالي المدين','',totDebit,'','إجمالي الدائن','',totCredit,'']);
+  data.push(['صافي','',totDebit-totCredit,'','الرصيد النهائي','',running,'']);
+
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(data);
+
+  // Column widths
+  ws['!cols']=[
+    {wch:14},{wch:14},{wch:18},{wch:28},{wch:22},{wch:14},{wch:14},{wch:16}
+  ];
+
+  // Merge company name header
+  ws['!merges']=[
+    {s:{r:0,c:0},e:{r:0,c:7}},
+    {s:{r:1,c:0},e:{r:1,c:7}},
+    {s:{r:2,c:0},e:{r:2,c:7}},
+  ];
+
+  XLSX.utils.book_append_sheet(wb,ws,'كشف الحساب');
+  XLSX.writeFile(wb,'كشف_حساب_'+acct.code+'_'+acct.name+'.xlsx');
+  toast('✅ تم تصدير كشف حساب '+acct.name);
+}
