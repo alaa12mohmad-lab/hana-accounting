@@ -374,21 +374,34 @@ function importSarkisFromExcel(){
       const lines = rows.map(r=>{
         const trips        = Number(r['عدد النقلات']    || r['نقلات'] || 0);
         const cubicPerTrip = Number(r['م³ للنقلة']      || r['م3/نقلة'] || r['م³/نقلة'] || 0);
-        const discountM    = Number(r['خصم م']           || 0);
+        const discountM    = Number(r['خصم م'] || 0);
+        const discountSell = Number(r['خصم م³ العميل'] ?? r['خصم م'] ?? 0);
+        const discountBuy  = Number(r['خصم م³ المورد'] ?? r['خصم م'] ?? 0);
         const sellPrice    = Number(r['سعر البيع / م³']  || r['سعر البيع'] || r['سعر بيع'] || 0);
         const buyPrice     = Number(r['سعر الشراء / م³'] || r['سعر الشراء'] || r['سعر شراء'] || 0);
         const gross = trips * cubicPerTrip;
         const net   = Math.max(0, gross - discountM);
+        const netS = Math.max(0, gross - discountSell);
+        const netB = Math.max(0, gross - discountBuy);
         return {
-          driverName:  String(r['اسم السائق']  || '').trim(),
-          plateNo:     String(r['رقم اللوحة']  || '').trim(),
-          trips, cubicPerTrip, discountM,
-          grossCubic:  gross, netCubic: net,
+          driverName:   String(r['اسم السائق']  || '').trim(),
+          plateNo:      String(r['رقم اللوحة']  || '').trim(),
+          trips, cubicPerTrip,
+          cubicSell:    cubicPerTrip,
+          cubicBuy:     cubicPerTrip,
+          discountM,
+          discountSell, discountBuy,
+          grossCubic:   gross,
+          grossSell:    gross,
+          grossBuy:     gross,
+          netCubic:     netS,
+          netSell:      netS,
+          netBuy:       netB,
           sellPrice, buyPrice,
-          sellTotal:  net * sellPrice,
-          buyTotal:   net * buyPrice,
-          profit:     net * sellPrice - net * buyPrice,
-          notes:      String(r['ملاحظات'] || '').trim(),
+          sellTotal:    netS * sellPrice,
+          buyTotal:     netB * buyPrice,
+          profit:       netS * sellPrice - netB * buyPrice,
+          notes:        String(r['ملاحظات'] || '').trim(),
         };
       });
 
