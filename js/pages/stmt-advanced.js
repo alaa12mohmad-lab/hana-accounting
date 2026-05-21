@@ -502,7 +502,7 @@ function renderClientQty(){
     +'<th>الخامة</th><th>السيارة</th><th>السائق</th>'
     +'<th style="background:#1a5276;color:#fff">نقلات</th>'
     +'<th style="background:#1a5276;color:#fff">م³عميل</th>'
-    +'<th style="background:#1a5276;color:#fff">خصم م</th>'
+    +'<th style="background:#1a5276;color:#fff">خصم م³ عميل</th>'
     +'<th>م³ صافي</th>'
     +'<th style="background:#1a5276;color:#fff">سعر البيع</th>'
     +'<th>إجمالي البيع</th>'
@@ -546,7 +546,7 @@ function renderClientQty(){
             +' onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #e2e8f0;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
             +'<td><input type="number" min="0" step="0.01" value="'+r.cubicSell+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="cubicSell"'
             +' onchange="updateQtyCell(this)" style="width:60px;text-align:center;border:1px solid #1a5276;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
-            +'<td><input type="number" min="0" step="0.01" value="'+r.discountM+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="discountM"'
+            +'<td><input type="number" min="0" step="0.01" value="'+r.discountM+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="discountSell"'
             +' onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #dc2626;border-radius:4px;padding:2px 4px;font-family:inherit;color:#dc2626"></td>'
             // Calculated
             +'<td class="font-bold text-center" id="net-c-'+r.skId+'-'+r.lineIdx+'">'+net.toFixed(1)+'</td>'
@@ -645,7 +645,7 @@ function renderSupplierQty(){
     +'<th>الخامة</th><th>السيارة</th><th>السائق</th>'
     +'<th style="background:#4a1942;color:#fff">نقلات</th>'
     +'<th style="background:#4a1942;color:#fff">م³مورد</th>'
-    +'<th style="background:#4a1942;color:#fff">خصم م</th>'
+    +'<th style="background:#4a1942;color:#fff">خصم م³ مورد</th>'
     +'<th>م³ صافي</th>'
     +'<th style="background:#4a1942;color:#fff">سعر الشراء</th>'
     +'<th>إجمالي التكلفة</th>'
@@ -686,7 +686,7 @@ function renderSupplierQty(){
             +'<td class="text-xs">'+r.driverName+'</td>'
             +'<td><input type="number" min="0" value="'+r.trips+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="trips" onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #e2e8f0;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
             +'<td><input type="number" min="0" step="0.01" value="'+r.cubicBuy+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="cubicBuy" onchange="updateQtyCell(this)" style="width:60px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
-            +'<td><input type="number" min="0" step="0.01" value="'+r.discountM+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="discountM" onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #dc2626;border-radius:4px;padding:2px 4px;font-family:inherit;color:#dc2626"></td>'
+            +'<td><input type="number" min="0" step="0.01" value="'+r.discountM+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="discountBuy" onchange="updateQtyCell(this)" style="width:55px;text-align:center;border:1px solid #dc2626;border-radius:4px;padding:2px 4px;font-family:inherit;color:#dc2626"></td>'
             +'<td class="font-bold text-center" id="net-s-'+r.skId+'-'+r.lineIdx+'">'+net.toFixed(1)+'</td>'
             +'<td><input type="number" min="0" step="0.01" value="'+r.buyPrice+'" data-sk="'+r.skId+'" data-li="'+r.lineIdx+'" data-field="buyPrice" onchange="updateQtyCell(this)" style="width:65px;text-align:center;border:1px solid #7c3aed;border-radius:4px;padding:2px 4px;font-family:inherit"></td>'
             +'<td class="font-bold text-center" style="color:#dc2626" id="tot-s-'+r.skId+'-'+r.lineIdx+'">'+curr(tot)+'</td>'
@@ -714,7 +714,9 @@ window.updateQtyCell = function(input){
   var trips  = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="trips"]')?.value)||0;
   var cSell  = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="cubicSell"]')?.value)||0;
   var cBuy   = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="cubicBuy"]')?.value)||0;
-  var disc   = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="discountM"]')?.value)||0;
+  var discS  = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="discountSell"]')?.value)||0;
+  var discB  = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="discountBuy"]')?.value)||0;
+  var disc   = discS || discB || 0; // fallback
   var sPrice = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="sellPrice"]')?.value)||0;
   var bPrice = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="buyPrice"]')?.value)||0;
 
@@ -722,7 +724,7 @@ window.updateQtyCell = function(input){
   var netC = document.getElementById('net-c-'+sk+'-'+li);
   var totC = document.getElementById('tot-c-'+sk+'-'+li);
   if(cSell && netC){
-    var nc = Math.max(0, trips*cSell - disc);
+    var nc = Math.max(0, trips*cSell - discS);
     netC.textContent = nc.toFixed(1);
     if(totC) totC.textContent = curr(nc*sPrice);
   }
@@ -730,7 +732,7 @@ window.updateQtyCell = function(input){
   var netS = document.getElementById('net-s-'+sk+'-'+li);
   var totS = document.getElementById('tot-s-'+sk+'-'+li);
   if(cBuy && netS){
-    var nb = Math.max(0, trips*cBuy - disc);
+    var nb = Math.max(0, trips*cBuy - discB);
     netS.textContent = nb.toFixed(1);
     if(totS) totS.textContent = curr(nb*bPrice);
   }
@@ -751,9 +753,10 @@ window.saveQtyRow = function(btn){
   var line = Object.assign({}, lines[li]);
 
   var trips = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="trips"]')?.value)||0;
-  var disc  = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountM"]')?.value)||0;
-  line.trips     = trips;
-  line.discountM = disc;
+  var discS = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountSell"]')?.value)||0;
+  var discB = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountBuy"]')?.value)||0;
+  line.trips = trips;
+  if(mode==='client'){ line.discountSell=discS; } else { line.discountBuy=discB; }
 
   if(mode==='client'){
     var cSell  = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="cubicSell"]')?.value)||0;
