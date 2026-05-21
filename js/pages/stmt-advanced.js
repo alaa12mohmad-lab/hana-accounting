@@ -937,40 +937,51 @@ function exportClientQtyExcel(){
     if(selClient && sk.client!==selClient) return;
     if(from && sk.date<from) return;
     if(to   && sk.date>to)   return;
-    (sk.lines||[]).forEach(function(ln,li){
-      var cubicSell = ln.cubicSell!=null?Number(ln.cubicSell):Number(ln.cubicPerTrip)||0;
-      var disc      = Number(ln.discountM)||0;
+    (sk.lines||[]).forEach(function(ln){
       var trips     = Number(ln.trips)||0;
-      var net       = Math.max(0, trips*cubicSell-disc);
+      var cubicSell = ln.cubicSell!=null ? Number(ln.cubicSell) : Number(ln.cubicPerTrip)||0;
+      var cubicBuy  = ln.cubicBuy!=null  ? Number(ln.cubicBuy)  : Number(ln.cubicPerTrip)||0;
+      var discSell  = ln.discountSell!=null ? Number(ln.discountSell) : Number(ln.discountM)||0;
+      var discBuy   = ln.discountBuy!=null  ? Number(ln.discountBuy)  : Number(ln.discountM)||0;
+      var netSell   = Math.max(0, trips*cubicSell - discSell);
+      var netBuy    = Math.max(0, trips*cubicBuy  - discBuy);
       var sellPrice = Number(ln.sellPrice)||0;
+      var buyPrice  = Number(ln.buyPrice)||0;
       rows.push([
-        '#'+sk.id, sk.date?sk.date.split('-').reverse().join('/'):'',
+        '#'+sk.id,
+        sk.date ? sk.date.split('-').reverse().join('/') : '',
         sk.client, sk.supplier, sk.material,
         ln.plateNo||'', ln.driverName||'',
-        trips, cubicSell, disc, net, sellPrice, net*sellPrice,
+        trips,
+        cubicSell, discSell, netSell, sellPrice, netSell*sellPrice,
+        cubicBuy,  discBuy,  netBuy,  buyPrice,  netBuy*buyPrice,
         sk.status||'',
       ]);
     });
   });
   rows.sort(function(a,b){ return (b[1]||'').localeCompare(a[1]||''); });
 
+  var cols = ['الحافظة','التاريخ','العميل','المورد','الخامة','السيارة','السائق',
+    'نقلات',
+    'م³ عميل','خصم م³ عميل','م³ صافي عميل','سعر البيع','إجمالي البيع',
+    'م³ مورد','خصم م³ مورد','م³ صافي مورد','سعر الشراء','إجمالي التكلفة',
+    'الحالة'];
+
+  var hdrSpan = new Array(cols.length).fill('');
   var header = [
-    [co.name||'شركة الهنا للنقل','','','','','كشف كميات العميل','','','','','','','',''],
-    [selClient||'كل العملاء','','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم'),'','','','','','','',''],
+    Object.assign(hdrSpan.slice(), {0: co.name||'شركة الهنا للنقل', 5:'كشف كميات العميل التفصيلي'}),
+    Object.assign(hdrSpan.slice(), {0: selClient||'كل العملاء', 4:'من: '+(from||'البداية'), 5:'إلى: '+(to||'اليوم')}),
     [],
-    ['الحافظة','التاريخ','العميل','المورد','الخامة','السيارة','السائق',
-     'نقلات','م³عميل','خصم م','م³ صافي','سعر البيع','إجمالي البيع','الحالة'],
+    cols,
   ];
 
-  // Totals row
-  var totRow = ['','','','','','','الإجمالي',
-    rows.reduce(function(s,r){return s+r[7];},0),
-    '', '',
-    rows.reduce(function(s,r){return s+r[10];},0),
-    '',
-    rows.reduce(function(s,r){return s+r[12];},0),
-    '',
-  ];
+  var totRow = new Array(cols.length).fill('');
+  totRow[6]  = 'الإجمالي';
+  totRow[7]  = rows.reduce(function(s,r){return s+r[7];},0);
+  totRow[10] = rows.reduce(function(s,r){return s+r[10];},0);
+  totRow[12] = rows.reduce(function(s,r){return s+r[12];},0);
+  totRow[15] = rows.reduce(function(s,r){return s+r[15];},0);
+  totRow[17] = rows.reduce(function(s,r){return s+r[17];},0);
 
   xlsxExport(header.concat(rows).concat([totRow]),
     'كشف_كميات_عميل'+(selClient?'_'+selClient:''), 'كميات العميل');
@@ -988,45 +999,60 @@ function exportSupplierQtyExcel(){
     if(selSupp && sk.supplier!==selSupp) return;
     if(from && sk.date<from) return;
     if(to   && sk.date>to)   return;
-    (sk.lines||[]).forEach(function(ln,li){
-      var cubicBuy = ln.cubicBuy!=null?Number(ln.cubicBuy):Number(ln.cubicPerTrip)||0;
-      var disc     = Number(ln.discountM)||0;
-      var trips    = Number(ln.trips)||0;
-      var net      = Math.max(0, trips*cubicBuy-disc);
-      var buyPrice = Number(ln.buyPrice)||0;
-      var stored   = Number(ln.buyTotal)||0;
+    (sk.lines||[]).forEach(function(ln){
+      var trips     = Number(ln.trips)||0;
+      var cubicSell = ln.cubicSell!=null ? Number(ln.cubicSell) : Number(ln.cubicPerTrip)||0;
+      var cubicBuy  = ln.cubicBuy!=null  ? Number(ln.cubicBuy)  : Number(ln.cubicPerTrip)||0;
+      var discSell  = ln.discountSell!=null ? Number(ln.discountSell) : Number(ln.discountM)||0;
+      var discBuy   = ln.discountBuy!=null  ? Number(ln.discountBuy)  : Number(ln.discountM)||0;
+      var netSell   = Math.max(0, trips*cubicSell - discSell);
+      var netBuy    = Math.max(0, trips*cubicBuy  - discBuy);
+      var sellPrice = Number(ln.sellPrice)||0;
+      var buyPrice  = Number(ln.buyPrice)||0;
+      var stored    = Number(ln.buyTotal)||0;
       rows.push([
-        '#'+sk.id, sk.date?sk.date.split('-').reverse().join('/'):'',
+        '#'+sk.id,
+        sk.date ? sk.date.split('-').reverse().join('/') : '',
         sk.client, sk.supplier, sk.material,
         ln.plateNo||'', ln.driverName||'',
-        trips, cubicBuy, disc, net, buyPrice,
-        buyPrice>0?net*buyPrice:stored, stored, sk.status||'',
+        trips,
+        cubicSell, discSell, netSell, sellPrice, netSell*sellPrice,
+        cubicBuy,  discBuy,  netBuy,  buyPrice,
+        buyPrice>0 ? netBuy*buyPrice : stored,
+        stored,
+        sk.status||'',
       ]);
     });
   });
   rows.sort(function(a,b){ return (b[1]||'').localeCompare(a[1]||''); });
 
+  var cols = ['الحافظة','التاريخ','العميل','المورد','الخامة','السيارة','السائق',
+    'نقلات',
+    'م³ عميل','خصم م³ عميل','م³ صافي عميل','سعر البيع','إجمالي البيع',
+    'م³ مورد','خصم م³ مورد','م³ صافي مورد','سعر الشراء','إجمالي التكلفة',
+    'محفوظ','الحالة'];
+
+  var hdrSpan = new Array(cols.length).fill('');
   var header = [
-    [co.name||'شركة الهنا للنقل','','','','','كشف كميات المورد','','','','','','','','',''],
-    [selSupp||'كل الموردين','','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم'),'','','','','','','','',''],
+    Object.assign(hdrSpan.slice(), {0: co.name||'شركة الهنا للنقل', 5:'كشف كميات المورد التفصيلي'}),
+    Object.assign(hdrSpan.slice(), {0: selSupp||'كل الموردين', 4:'من: '+(from||'البداية'), 5:'إلى: '+(to||'اليوم')}),
     [],
-    ['الحافظة','التاريخ','العميل','المورد','الخامة','السيارة','السائق',
-     'نقلات','م³مورد','خصم م','م³ صافي','سعر الشراء','إجمالي التكلفة','محفوظ','الحالة'],
+    cols,
   ];
 
-  var totRow = ['','','','','','','الإجمالي',
-    rows.reduce(function(s,r){return s+r[7];},0),
-    '', '',
-    rows.reduce(function(s,r){return s+r[10];},0),
-    '',
-    rows.reduce(function(s,r){return s+r[12];},0),
-    rows.reduce(function(s,r){return s+r[13];},0),
-    '',
-  ];
+  var totRow = new Array(cols.length).fill('');
+  totRow[6]  = 'الإجمالي';
+  totRow[7]  = rows.reduce(function(s,r){return s+r[7];},0);
+  totRow[10] = rows.reduce(function(s,r){return s+r[10];},0);
+  totRow[12] = rows.reduce(function(s,r){return s+r[12];},0);
+  totRow[15] = rows.reduce(function(s,r){return s+r[15];},0);
+  totRow[17] = rows.reduce(function(s,r){return s+r[17];},0);
+  totRow[18] = rows.reduce(function(s,r){return s+r[18];},0);
 
   xlsxExport(header.concat(rows).concat([totRow]),
     'كشف_كميات_مورد'+(selSupp?'_'+selSupp:''), 'كميات المورد');
 }
+
 
 // ── إشعارات المديونية → Excel ────────────────────────────────────
 function exportNotesExcel(){
