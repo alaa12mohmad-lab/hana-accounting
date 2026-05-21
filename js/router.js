@@ -127,33 +127,40 @@ function onDBReady(fn){
 
 // ── calcLine ──────────────────────────────────────────────────────
 function calcLine(l){
-  var trips     = Number(l.trips)     || 0;
-  var discountM = Number(l.discountM) || 0;
-  var sellPrice = Number(l.sellPrice) || 0;
-  var buyPrice  = Number(l.buyPrice)  || 0;
+  var trips      = Number(l.trips)      || 0;
+  var sellPrice  = Number(l.sellPrice)  || 0;
+  var buyPrice   = Number(l.buyPrice)   || 0;
 
-  var cubicSell = (l.cubicSell != null && l.cubicSell !== '')
-    ? Number(l.cubicSell)
-    : (Number(l.cubicPerTrip) || 0);
-  var cubicBuy  = (l.cubicBuy  != null && l.cubicBuy  !== '')
-    ? Number(l.cubicBuy)
-    : (Number(l.cubicPerTrip) || 0);
+  var cubicSell  = (l.cubicSell != null && l.cubicSell !== '')
+    ? Number(l.cubicSell) : (Number(l.cubicPerTrip) || 0);
+  var cubicBuy   = (l.cubicBuy  != null && l.cubicBuy  !== '')
+    ? Number(l.cubicBuy)  : (Number(l.cubicPerTrip) || 0);
 
-  var grossSell = trips * cubicSell;
-  var grossBuy  = trips * cubicBuy;
-  var netSell   = Math.max(0, grossSell - discountM);
-  var netBuy    = Math.max(0, grossBuy  - discountM);
+  // خصم منفصل للعميل والمورد
+  // discountSell = خصم العميل, discountBuy = خصم المورد
+  // discountM = خصم مشترك قديم (للتوافق مع البيانات القديمة)
+  var discountSell = (l.discountSell != null && l.discountSell !== '')
+    ? Number(l.discountSell) : (Number(l.discountM) || 0);
+  var discountBuy  = (l.discountBuy  != null && l.discountBuy  !== '')
+    ? Number(l.discountBuy)  : (Number(l.discountM) || 0);
+
+  var grossSell  = trips * cubicSell;
+  var grossBuy   = trips * cubicBuy;
+  var netSell    = Math.max(0, grossSell - discountSell);
+  var netBuy     = Math.max(0, grossBuy  - discountBuy);
 
   return Object.assign({}, l, {
-    grossCubic:  parseFloat(grossSell.toFixed(3)),
-    grossSell:   parseFloat(grossSell.toFixed(3)),
-    grossBuy:    parseFloat(grossBuy.toFixed(3)),
-    netCubic:    parseFloat(netSell.toFixed(3)),
-    netSell:     parseFloat(netSell.toFixed(3)),
-    netBuy:      parseFloat(netBuy.toFixed(3)),
-    sellTotal:   parseFloat((netSell * sellPrice).toFixed(2)),
-    buyTotal:    parseFloat((netBuy  * buyPrice).toFixed(2)),
-    profit:      parseFloat((netSell * sellPrice - netBuy * buyPrice).toFixed(2)),
+    discountSell:  parseFloat(discountSell.toFixed(3)),
+    discountBuy:   parseFloat(discountBuy.toFixed(3)),
+    grossCubic:    parseFloat(grossSell.toFixed(3)),
+    grossSell:     parseFloat(grossSell.toFixed(3)),
+    grossBuy:      parseFloat(grossBuy.toFixed(3)),
+    netCubic:      parseFloat(netSell.toFixed(3)),
+    netSell:       parseFloat(netSell.toFixed(3)),
+    netBuy:        parseFloat(netBuy.toFixed(3)),
+    sellTotal:     parseFloat((netSell * sellPrice).toFixed(2)),
+    buyTotal:      parseFloat((netBuy  * buyPrice).toFixed(2)),
+    profit:        parseFloat((netSell * sellPrice - netBuy * buyPrice).toFixed(2)),
   });
 }
 
