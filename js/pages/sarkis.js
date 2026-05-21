@@ -269,7 +269,7 @@ function openSarkiModal(editId){
             <th style="padding:6px 4px;min-width:60px;background:#1a5276" title="تكعيب العميل">م³عميل</th>
             <th style="padding:6px 4px;min-width:60px;background:#1a3a1a" title="تكعيب المورد">م³مورد</th>
             <th style="padding:6px 4px;min-width:55px">إجمالي م³</th>
-            <th style="padding:6px 4px;min-width:50px">خصم م</th>
+            <th style="padding:6px 4px;min-width:60px">خصم م³<br><small style="font-size:8px;opacity:.8">عميل/مورد</small></th>
             <th style="padding:6px 4px;min-width:55px">صافي م³</th>
             <th style="padding:6px 4px;min-width:60px">س.بيع</th>
             <th style="padding:6px 4px;min-width:60px">س.شراء</th>
@@ -492,7 +492,7 @@ function viewSarki(id){
             <td style="padding:5px;text-align:center">${l.trips||0}</td>
             <td style="padding:5px;text-align:center">${l.cubicPerTrip||0}</td>
             <td style="padding:5px;text-align:center;font-weight:700">${(l.grossCubic||0).toFixed(1)}</td>
-            <td style="padding:5px;text-align:center;color:#dc2626">${l.discountM||0}</td>
+            <td style="padding:5px;text-align:center;color:#dc2626">${(l.discountSell??l.discountM??0)+' / '+(l.discountBuy??l.discountM??0)}</td>
             <td style="padding:5px;text-align:center;font-weight:700;color:#1F4E78">${(l.netCubic||0).toFixed(1)}</td>
             <td style="padding:5px;text-align:center">${l.sellPrice||0}</td>
             <td style="padding:5px;text-align:center">${l.buyPrice||0}</td>
