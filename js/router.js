@@ -253,11 +253,26 @@ function getCustomerPrice(customerName, materialName, date){
   const valid=c.prices.filter(p=>p.material===materialName&&(!date||p.from<=date)).sort((a,b)=>b.from.localeCompare(a.from));
   return valid[0]?.price||null;
 }
-function getSupplierPrice(supplierName, materialName, date){
+function getSupplierPrice(supplierName, materialName, date, clientName){
   const s=DB.getAll('suppliers').find(x=>x.name===supplierName);
   if(!s||!s.prices) return null;
-  const valid=s.prices.filter(p=>p.material===materialName&&(!date||p.from<=date)).sort((a,b)=>b.from.localeCompare(a.from));
-  return valid[0]?.price||null;
+  const valid = s.prices.filter(function(p){
+    return p.material===materialName
+      && (!date || p.from<=date);
+  });
+  // Priority: client-specific price > general price (no client)
+  if(clientName){
+    const specific = valid.filter(function(p){ return p.client===clientName; })
+      .sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
+    if(specific.length) return specific[0].price||null;
+  }
+  // Fall back to general (empty client)
+  const general = valid.filter(function(p){ return !p.client; })
+    .sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
+  if(general.length) return general[0].price||null;
+  // Fall back to any
+  const any = valid.sort(function(a,b){ return (b.from||'').localeCompare(a.from||''); });
+  return any[0]?.price||null;
 }
 function getLastStatement(name,type){
   return DB.getAll('statements').filter(s=>s.entityName===name&&s.type===type&&s.status==='معتمد').sort((a,b)=>b.approvedAt-a.approvedAt)[0]||null;
