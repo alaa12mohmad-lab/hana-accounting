@@ -44,16 +44,22 @@ function openPartyModal(col,single,editId){
   const refreshPrices=()=>{
     const el=document.getElementById('party-prices');
     if(!el)return;
+    const customers=DB.getAll('customers');
     el.innerHTML=window._partyPrices.map((pr,i)=>`
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:5px;align-items:center;background:#f8fafc;border-radius:6px;padding:5px 7px;margin-bottom:5px">
+      <div style="display:grid;grid-template-columns:${col==='suppliers'?'1.5fr 1.5fr 1fr 1fr auto':'2fr 1fr 1fr auto'};gap:5px;align-items:center;background:#f8fafc;border-radius:6px;padding:5px 7px;margin-bottom:5px">
         <select style="border:1px solid #e5e7eb;border-radius:4px;padding:3px 5px;font-size:10px;width:100%" onchange="window._partyPrices[${i}].material=this.value">
           ${materials.map(m=>`<option ${pr.material===m.name?'selected':''}>${m.name}</option>`).join('')}
         </select>
+        ${col==='suppliers'?`
+        <select style="border:1px solid #1a5276;border-radius:4px;padding:3px 5px;font-size:10px;width:100%" onchange="window._partyPrices[${i}].client=this.value">
+          <option value="">— كل العملاء —</option>
+          ${customers.map(c=>`<option ${pr.client===c.name?'selected':''}>${c.name}</option>`).join('')}
+        </select>`:''}
         <input type="number" placeholder="${priceLabel}/م³" value="${pr.price||''}" oninput="window._partyPrices[${i}].price=Number(this.value)" style="border:1px solid #e5e7eb;border-radius:4px;padding:3px 5px;font-size:10px;width:100%">
         <input type="date" value="${pr.from||''}" oninput="window._partyPrices[${i}].from=this.value" style="border:1px solid #e5e7eb;border-radius:4px;padding:3px 5px;font-size:10px;width:100%">
-        <button onclick="window._partyPrices.splice(${i},1);window._rpf()" style="background:#fee2e2;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;color:#dc2626;font-size:11px">✕</button>
-      </div>`).join('')||`<div class="text-xs text-gray" style="font-style:italic;padding:8px 0">لا توجد أسعار — اضغط "إضافة سعر"</div>`;
-  };
+        <button onclick="window._partyPrices.splice(${i},1);refreshPrices()" style="background:#fee2e2;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px;color:#dc2626">✕</button>
+      </div>`).join('')||'<div class="text-xs text-gray" style="font-style:italic;padding:5px">لا توجد أسعار — اضغط + سعر لإضافة</div>';
+  };;
   window._rpf=refreshPrices;
 
   const v=(k,d='')=>item?.[k]??d;
