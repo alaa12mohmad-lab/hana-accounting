@@ -320,7 +320,7 @@ function onSkMaterialChange(sel){
 
   // Get prices for this customer/supplier/material
   const cPrice=client?getCustomerPrice(client,matName,date):null;
-  const sPrice=supplier?getSupplierPrice(supplier,matName,date):null;
+  const sPrice=supplier?getSupplierPrice(supplier,matName,date,client):null;
 
   // Show hint
   const hint=document.getElementById('sk-price-hint');
