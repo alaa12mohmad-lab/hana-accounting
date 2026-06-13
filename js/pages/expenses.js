@@ -42,7 +42,7 @@ function renderExpenses(){
     </div>
     <!-- Tabs -->
     <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
-      ${[['expenses','💸 المصروفات'],['salaries','👷 الرواتب والأجور'],['partners','🤝 مستحقات الشركاء']].map(([k,l])=>`
+      ${[['expenses','💸 المصروفات'],['salaries','👷 الرواتب والأجور'],['partners','🤝 مستحقات الشركاء'],['partner-report','📊 تقارير الشركاء']].map(([k,l])=>`
         <button onclick="window._EXP_TAB='${k}';nav('expenses')" style="
           padding:10px 18px;border:none;background:none;cursor:pointer;
           font-family:inherit;font-size:12px;font-weight:600;
@@ -51,7 +51,7 @@ function renderExpenses(){
           margin-bottom:-2px">${l}</button>`).join('')}
     </div>
     <div id="exp-tab-content">
-      ${tab==='expenses' ? renderExpTab() : tab==='salaries' ? renderSalTab() : renderPartnersTab()}
+      ${tab==='expenses' ? renderExpTab() : tab==='salaries' ? renderSalTab() : tab==='partner-report' ? renderPartnerReport() : renderPartnersTab()}
     </div>
   </div>`;
 }
@@ -457,4 +457,314 @@ function showPartnerHistory(name){
     ${payments.length?`<div class="flex-between mt10 card-sm"><span>الإجمالي المدفوع</span><strong class="text-green">${curr(total)}</strong></div>`:''}`,
     '<button class="btn btn-gray" onclick="closeModal()">إغلاق</button>',
     'modal-md');
+}
+
+
+// ══ تقارير الشركاء ════════════════════════════════════════════════
+window._PR = {from:'', to:'', partner:'', view:'summary'}; // state
+
+function renderPartnerReport(){
+  const partners = DB.getAll('partners');
+  const st = window._PR;
+
+  const partnerOpts = ['<option value="">— كل الشركاء —</option>']
+    .concat(partners.map(p=>`<option value="${p.name}" ${p.name===st.partner?'selected':''}>${p.name}</option>`))
+    .join('');
+
+  // ── Collect data ──────────────────────────────────────────────
+  const approvedSarkis = DB.getAll('sarkis').filter(sk=>{
+    if(sk.status==='ملغي') return false;
+    if(st.from && sk.date < st.from) return false;
+    if(st.to   && sk.date > st.to)   return false;
+    return true;
+  });
+
+  // Build per-partner per-material data
+  const reportData = partners
+    .filter(p => !st.partner || p.name===st.partner)
+    .map(p=>{
+      const rates = p.rates||[];
+      const materials = [...new Set(rates.map(r=>r.material).filter(Boolean))];
+      
+      const matDetails = materials.map(mat=>{
+        const rate = rates.find(r=>r.material===mat);
+        const price = Number(rate?.pricePerCubic)||0;
+
+        // Per-sarki lines for this material
+        const lines = [];
+        approvedSarkis.forEach(sk=>{
+          if(sk.material !== mat) return;
+          (sk.lines||[]).forEach(ln=>{
+            const net = Number(ln.netSell||ln.netCubic)||0;
+            if(!net) return;
+            lines.push({
+              date: sk.date,
+              skId: sk.id,
+              client: sk.client,
+              plateNo: ln.plateNo||'',
+              trips: Number(ln.trips)||0,
+              netM3: net,
+              price,
+              amount: net * price,
+            });
+          });
+        });
+
+        const totM3     = lines.reduce((s,l)=>s+l.netM3, 0);
+        const totAmount = lines.reduce((s,l)=>s+l.amount, 0);
+        return {mat, price, lines, totM3, totAmount};
+      }).filter(m=>m.totM3>0);
+
+      const totalM3     = matDetails.reduce((s,m)=>s+m.totM3, 0);
+      const totalAmount = matDetails.reduce((s,m)=>s+m.totAmount, 0);
+
+      // Payments made
+      const paid = DB.getAll('expenses')
+        .filter(r=>r.category==='مستحق شريك'&&r.vendor===p.name)
+        .reduce((s,r)=>s+(Number(r.amount)||0), 0);
+      const manualAdj = getPartnerManualBalance(p.name);
+      const remaining = totalAmount - paid + manualAdj;
+
+      return {p, matDetails, totalM3, totalAmount, paid, manualAdj, remaining};
+    }).filter(d=>d.totalM3>0||d.totalAmount>0);
+
+  const grandM3     = reportData.reduce((s,d)=>s+d.totalM3, 0);
+  const grandAmount = reportData.reduce((s,d)=>s+d.totalAmount, 0);
+  const grandPaid   = reportData.reduce((s,d)=>s+d.paid, 0);
+  const grandRem    = reportData.reduce((s,d)=>s+d.remaining, 0);
+
+  // ── Render ────────────────────────────────────────────────────
+  return `<div>
+    <!-- Filters -->
+    <div class="card mb12" style="padding:10px 14px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="margin:0;min-width:160px">
+          <label style="font-size:10px">الشريك</label>
+          <select onchange="window._PR.partner=this.value;nav('expenses')" style="width:100%">${partnerOpts}</select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10px">من</label>
+          <input type="date" value="${st.from}" onchange="window._PR.from=this.value;nav('expenses')">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10px">إلى</label>
+          <input type="date" value="${st.to}" onchange="window._PR.to=this.value;nav('expenses')">
+        </div>
+        <div style="display:flex;gap:4px;align-self:flex-end">
+          <button class="btn btn-sm ${st.view==='summary'?'btn-primary':'btn-gray'}"
+            onclick="window._PR.view='summary';nav('expenses')">📋 ملخص</button>
+          <button class="btn btn-sm ${st.view==='detail'?'btn-primary':'btn-gray'}"
+            onclick="window._PR.view='detail';nav('expenses')">🔍 تفصيلي</button>
+          <button class="btn btn-gray btn-sm" onclick="window._PR.from='';window._PR.to='';window._PR.partner='';nav('expenses')">✕ مسح</button>
+          <button class="btn btn-gray btn-sm" onclick="printPartnerReport()">🖨️ PDF</button>
+          <button class="btn btn-gray btn-sm" onclick="exportPartnerReportExcel()">📊 Excel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI bar -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      ${[
+        ['إجمالي م³','💧',grandM3.toFixed(1),'#1d4ed8'],
+        ['إجمالي المستحق','💰',curr(grandAmount),'#d97706'],
+        ['إجمالي المدفوع','✅',curr(grandPaid),'#16a34a'],
+        ['إجمالي المتبقي','⚠️',curr(grandRem),grandRem>0?'#dc2626':'#16a34a'],
+      ].map(([lbl,ic,val,col])=>`
+        <div class="card" style="padding:12px;text-align:center;border-top:3px solid ${col}">
+          <div style="font-size:20px">${ic}</div>
+          <div class="text-xs text-gray mt4">${lbl}</div>
+          <div style="font-size:14px;font-weight:700;color:${col};margin-top:4px">${val}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Report -->
+    <div id="partner-report-content">
+    ${reportData.length===0
+      ? `<div class="card" style="text-align:center;padding:40px">
+           <div style="font-size:36px">📭</div>
+           <p class="text-gray mt8">لا توجد بيانات للفترة المحددة</p>
+         </div>`
+      : reportData.map(({p,matDetails,totalM3,totalAmount,paid,manualAdj,remaining})=>`
+        <div class="card mb12">
+          <div class="flex-between mb8">
+            <div>
+              <div style="font-size:16px;font-weight:700">🤝 ${p.name}</div>
+              <div class="text-xs text-gray mt4">
+                ${st.from||'البداية'} → ${st.to||'اليوم'}
+              </div>
+            </div>
+            <div style="display:flex;gap:20px">
+              <div style="text-align:center">
+                <div class="text-xs text-gray">م³ إجمالي</div>
+                <div style="font-size:18px;font-weight:700;color:#1d4ed8">${totalM3.toFixed(1)}</div>
+              </div>
+              <div style="text-align:center">
+                <div class="text-xs text-gray">المستحق</div>
+                <div style="font-size:18px;font-weight:700;color:#d97706">${curr(totalAmount)}</div>
+              </div>
+              <div style="text-align:center">
+                <div class="text-xs text-gray">المدفوع</div>
+                <div style="font-size:18px;font-weight:700;color:#16a34a">${curr(paid)}</div>
+              </div>
+              <div style="text-align:center">
+                <div class="text-xs text-gray">المتبقي</div>
+                <div style="font-size:18px;font-weight:700;color:${remaining>0?'#dc2626':'#16a34a'}">${curr(remaining)}</div>
+              </div>
+            </div>
+          </div>
+
+          ${matDetails.map(({mat,price,lines,totM3,totAmount})=>`
+            <div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:8px">
+              <div class="flex-between mb6">
+                <div style="font-weight:700;color:#374151">📦 ${mat}</div>
+                <div style="font-size:11px;color:#64748b">
+                  سعر المتر: <strong>${price} ج.م</strong> |
+                  م³ صافي: <strong style="color:#1d4ed8">${totM3.toFixed(1)}</strong> |
+                  المستحق: <strong style="color:#d97706">${curr(totAmount)}</strong>
+                </div>
+              </div>
+              ${st.view==='detail'?`
+              <div class="tbl-wrap">
+                <table style="font-size:10px">
+                  <thead><tr style="background:#e2e8f0">
+                    <th>التاريخ</th><th>حافظة</th><th>العميل</th><th>السيارة</th><th>نقلات</th><th>م³ صافي</th><th>سعر/م³</th><th>المستحق</th>
+                  </tr></thead>
+                  <tbody>
+                    ${lines.sort((a,b)=>a.date.localeCompare(b.date)).map(l=>`
+                      <tr>
+                        <td>${fmtDate(l.date)}</td>
+                        <td>#${l.skId}</td>
+                        <td>${l.client}</td>
+                        <td class="text-xs" dir="ltr">${l.plateNo}</td>
+                        <td style="text-align:center">${l.trips}</td>
+                        <td style="text-align:center;font-weight:700;color:#1d4ed8">${l.netM3.toFixed(1)}</td>
+                        <td style="text-align:center">${l.price}</td>
+                        <td style="text-align:center;font-weight:700;color:#d97706">${curr(l.amount)}</td>
+                      </tr>`).join('')}
+                    <tr style="background:#FFE699;font-weight:700">
+                      <td colspan="4">الإجمالي</td>
+                      <td style="text-align:center">${lines.reduce((s,l)=>s+l.trips,0)}</td>
+                      <td style="text-align:center;color:#1d4ed8">${totM3.toFixed(1)}</td>
+                      <td></td>
+                      <td style="text-align:center;color:#d97706">${curr(totAmount)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>`:
+              `<div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${(()=>{const acc={};lines.forEach(l=>{if(!acc[l.client])acc[l.client]={client:l.client,m3:0,amount:0};acc[l.client].m3+=l.netM3;acc[l.client].amount+=l.amount;});return Object.values(acc).map(c=>`<span style="background:#e0f2fe;color:#0369a1;border-radius:6px;padding:3px 8px;font-size:10px">${c.client}: ${c.m3.toFixed(1)} م³ / ${curr(c.amount)}</span>`).join('');})()}
+              </div>`}
+            </div>`).join('')}
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ── Print Partner Report ──────────────────────────────────────────
+function printPartnerReport(){
+  const co = DB.getCompany();
+  const st = window._PR;
+  const content = document.getElementById('partner-report-content');
+  if(!content){ toast('لا توجد بيانات','error'); return; }
+
+  const printCSS = `
+    *{font-family:Tahoma,sans-serif;direction:rtl;box-sizing:border-box}
+    body{padding:14px;font-size:11px;color:#1f2937}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px}
+    .flex-between{display:flex;justify-content:space-between;align-items:center}
+    table{width:100%;border-collapse:collapse;font-size:10px}
+    thead tr{background:#1F4E78;color:#fff}
+    thead th{padding:5px 4px;text-align:right}
+    tbody td{padding:4px;border-bottom:1px solid #eee}
+    @media print{@page{margin:8mm;size:A4}}
+  `;
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
+    <title>تقرير الشركاء</title><style>${printCSS}</style></head><body>
+    <div style="border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#1F4E78">${co.name||'شركة الهنا للنقل'}</div>
+        <div style="font-size:13px;font-weight:700;margin-top:4px">📊 تقرير الشركاء${st.partner?' — '+st.partner:''}</div>
+      </div>
+      <div style="text-align:left;font-size:10px;color:#666">
+        <div>من: ${st.from||'البداية'}</div>
+        <div>إلى: ${st.to||'اليوم'}</div>
+        <div>تاريخ الطباعة: ${fmtDate(Date.now())}</div>
+      </div>
+    </div>
+    ${content.innerHTML}
+    <script>setTimeout(()=>window.print(),600)</script>
+    </body></html>`);
+  w.document.close();
+}
+
+// ── Excel Export ──────────────────────────────────────────────────
+function exportPartnerReportExcel(){
+  if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
+  const co = DB.getCompany();
+  const st = window._PR;
+  const partners = DB.getAll('partners').filter(p=>!st.partner||p.name===st.partner);
+  const approvedSarkis = DB.getAll('sarkis').filter(sk=>{
+    if(sk.status==='ملغي') return false;
+    if(st.from && sk.date<st.from) return false;
+    if(st.to   && sk.date>st.to)   return false;
+    return true;
+  });
+
+  const wb = XLSX.utils.book_new();
+
+  partners.forEach(p=>{
+    const rates = p.rates||[];
+    const allLines = [];
+
+    rates.forEach(rate=>{
+      if(!rate.material||!rate.pricePerCubic) return;
+      const price = Number(rate.pricePerCubic)||0;
+      approvedSarkis.forEach(sk=>{
+        if(sk.material!==rate.material) return;
+        (sk.lines||[]).forEach(ln=>{
+          const net = Number(ln.netSell||ln.netCubic)||0;
+          if(!net) return;
+          allLines.push([
+            sk.date?sk.date.split('-').reverse().join('/'):'-',
+            '#'+sk.id, sk.client, rate.material,
+            ln.plateNo||'', ln.driverName||'',
+            Number(ln.trips)||0,
+            net, price, net*price,
+          ]);
+        });
+      });
+    });
+
+    if(!allLines.length) return;
+
+    const paid = DB.getAll('expenses').filter(r=>r.category==='مستحق شريك'&&r.vendor===p.name)
+      .reduce((s,r)=>s+(Number(r.amount)||0),0);
+    const totM3  = allLines.reduce((s,r)=>s+r[7],0);
+    const totAmt = allLines.reduce((s,r)=>s+r[9],0);
+
+    const wsData = [
+      [co.name||'شركة الهنا للنقل','','','','','','','','',''],
+      ['تقرير الشريك: '+p.name,'','','','من: '+(st.from||'البداية'),'إلى: '+(st.to||'اليوم'),'','','',''],
+      [],
+      ['التاريخ','رقم الحافظة','العميل','الخامة','السيارة','السائق','نقلات','م³ صافي','سعر/م³','المستحق'],
+      ...allLines.sort((a,b)=>a[0].localeCompare(b[0])),
+      [],
+      ['','','','','','','الإجمالي', totM3, '', totAmt],
+      [],
+      ['','','','المدفوع','',paid,'','المتبقي','',totAmt-paid],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [{wch:12},{wch:10},{wch:14},{wch:14},{wch:12},{wch:12},{wch:8},{wch:10},{wch:8},{wch:14}];
+    ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:9}},{s:{r:1,c:0},e:{r:1,c:9}}];
+
+    const sheetName = p.name.slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+
+  if(wb.SheetNames.length===0){ toast('لا توجد بيانات للتصدير','error'); return; }
+  XLSX.writeFile(wb, 'تقرير_الشركاء_'+(st.from||'')+'_'+(st.to||'')+'.xlsx');
+  toast('✅ تم تصدير تقرير الشركاء');
 }
