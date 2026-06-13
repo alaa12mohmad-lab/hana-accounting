@@ -247,6 +247,21 @@ function getSupplierBalance(name){
     .reduce((t,j)=>t+(Number(j.debitAmount)||0),0);
   return ob+buys-pmts-manualPmts;
 }
+function getPartnerManualBalance(name){
+  // قيود يدوية تؤثر على حساب الشريك (3001)
+  // مدين 3001 = خصم من مستحق الشريك (تم الصرف له)
+  // دائن 3001 = إضافة لمستحق الشريك
+  const entries = DB.getAll('journal').filter(j=>
+    j.entryType==='يدوي' && j.party===name && j.partyType==='شريك'
+  );
+  let net = 0;
+  entries.forEach(j=>{
+    if(j.debitCode===ACCT_PARTNERS)  net -= Number(j.debitAmount)||0;  // صرف للشريك
+    if(j.creditCode===ACCT_PARTNERS) net += Number(j.creditAmount)||0; // إضافة لحساب الشريك
+  });
+  return net;
+}
+
 function getCustomerPrice(customerName, materialName, date){
   const c=DB.getAll('customers').find(x=>x.name===customerName);
   if(!c||!c.prices) return null;
