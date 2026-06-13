@@ -256,8 +256,8 @@ function getPartnerManualBalance(name){
   );
   let net = 0;
   entries.forEach(j=>{
-    if(j.debitCode===ACCT_PARTNERS)  net -= Number(j.debitAmount)||0;  // صرف للشريك
-    if(j.creditCode===ACCT_PARTNERS) net += Number(j.creditAmount)||0; // إضافة لحساب الشريك
+    if(j.debitCode==='3001')  net -= Number(j.debitAmount)||0;   // صرف للشريك
+    if(j.creditCode==='3001') net += Number(j.creditAmount)||0;  // إضافة لحساب الشريك
   });
   return net;
 }
