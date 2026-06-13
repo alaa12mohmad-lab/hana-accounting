@@ -323,7 +323,7 @@ function renderPartnersTab(){
       </div>
     </div>
     <div style="display:grid;gap:12px">
-    ${partnerData.map(({p,rates,due,paid,remaining,details})=>`
+    ${partnerData.map(({p,rates,due,paid,manualAdj,remaining,details})=>`
       <div class="card" style="border-right:4px solid ${remaining>0?'#d97706':'#16a34a'}">
         <div class="flex-between mb8">
           <div>
