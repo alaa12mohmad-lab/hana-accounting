@@ -304,9 +304,10 @@ function renderPartnersTab(){
       }
     });
 
-    const paid      = allPayments.filter(r=>r.vendor===p.name).reduce((t,r)=>t+(Number(r.amount)||0),0);
-    const remaining = due - paid;
-    return {p, rates, due, paid, remaining, details};
+    const paid       = allPayments.filter(r=>r.vendor===p.name).reduce((t,r)=>t+(Number(r.amount)||0),0);
+    const manualAdj  = getPartnerManualBalance(p.name); // قيود يدوية: + إضافة / - صرف
+    const remaining  = due - paid + manualAdj;
+    return {p, rates, due, paid, manualAdj, remaining, details};
   });
 
   const totalDue  = partnerData.reduce((t,d)=>t+d.due, 0);
@@ -345,6 +346,7 @@ function renderPartnersTab(){
             <div style="text-align:center">
               <div class="text-xs text-gray">المتبقي</div>
               <div style="font-size:16px;font-weight:700;color:${remaining>0?'#dc2626':'#16a34a'}">${curr(remaining)}</div>
+              ${manualAdj!==0?`<div class="text-xs" style="color:${manualAdj>0?'#16a34a':'#d97706'}">قيود يدوية: ${manualAdj>0?'+':''}${curr(manualAdj)}</div>`:''}
             </div>
           </div>
         </div>
