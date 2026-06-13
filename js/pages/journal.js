@@ -180,6 +180,8 @@ function onJrnAcctChange(side, sel){
   const psel=document.getElementById(partyId);
   if(!row||!lbl||!psel)return;
 
+  const partners=DB.getAll('partners');
+
   if(code===ACCT_CUSTOMERS){
     row.style.display='';
     lbl.textContent='العميل المتأثر';
@@ -188,6 +190,10 @@ function onJrnAcctChange(side, sel){
     row.style.display='';
     lbl.textContent='المورد المتأثر';
     psel.innerHTML=suppliers.map(s=>`<option>${s.name}</option>`).join('');
+  } else if(code===ACCT_PARTNERS){
+    row.style.display='';
+    lbl.textContent='الشريك المتأثر';
+    psel.innerHTML=partners.map(p=>`<option>${p.name}</option>`).join('');
   } else {
     row.style.display='none';
   }
@@ -298,6 +304,11 @@ function saveJrn(type,editId){
       const cp=document.getElementById('jn-credit-party');
       party=(dCode===ACCT_SUPPLIERS?dp:cp)?.value||'';
       partyType='مورد';
+    } else if(dCode===ACCT_PARTNERS||cCode===ACCT_PARTNERS){
+      const dp=document.getElementById('jn-debit-party');
+      const cp=document.getElementById('jn-credit-party');
+      party=(dCode===ACCT_PARTNERS?dp:cp)?.value||'';
+      partyType='شريك';
     }
     data={...data, party, partyType,
       debitCode:dSel[0], debitName:dSel[1],
