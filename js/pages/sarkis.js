@@ -529,6 +529,7 @@ function viewSarki(id){
 let _JRN_TAB='all';
 const ACCT_CUSTOMERS='1010'; // ذمم العملاء
 const ACCT_SUPPLIERS='2001'; // ذمم الموردين
+const ACCT_PARTNERS='3001';  // حسابات الشركاء
 
 function renderJournal(){
   const jrn=DB.getAll('journal').sort((a,b)=>b.createdAt-a.createdAt);
