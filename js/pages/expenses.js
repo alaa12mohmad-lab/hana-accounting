@@ -768,3 +768,358 @@ function exportPartnerReportExcel(){
   XLSX.writeFile(wb, 'تقرير_الشركاء_'+(st.from||'')+'_'+(st.to||'')+'.xlsx');
   toast('✅ تم تصدير تقرير الشركاء');
 }
+
+// ══ PARTNER FINANCIALS PAGE ═══════════════════════════════════════
+window._PF = {tab:'overview', partner:'', from:'', to:''};
+
+function renderPartnerFinancials(){
+  const tab = window._PF.tab;
+  const partners = DB.getAll('partners');
+  const approvedSarkis = DB.getAll('sarkis').filter(s=>s.status!=='ملغي');
+
+  // Build full data for all partners
+  const allData = partners.map(p=>{
+    const rates = p.rates||[];
+    let totalM3=0, totalDue=0;
+    const matBreakdown = [];
+
+    rates.forEach(rate=>{
+      if(!rate.material||!rate.pricePerCubic) return;
+      const price = Number(rate.pricePerCubic)||0;
+      let m3=0;
+      approvedSarkis.forEach(sk=>{
+        if(sk.material!==rate.material) return;
+        (sk.lines||[]).forEach(ln=>{ m3 += Number(ln.netSell||ln.netCubic)||0; });
+      });
+      if(m3>0){ matBreakdown.push({mat:rate.material, price, m3, amount:m3*price}); }
+      totalM3 += m3; totalDue += m3*price;
+    });
+
+    const payments = DB.getAll('journal').filter(j=>j.party===p.name&&j.partyType==='شريك');
+    const manualPaid = payments.filter(j=>j.entryType==='يدوي'&&j.debitCode==='3001')
+      .reduce((s,j)=>s+(Number(j.debitAmount)||0),0);
+    const remaining = totalDue - manualPaid;
+    return {p, matBreakdown, totalM3, totalDue, manualPaid, remaining, payments};
+  });
+
+  const grandDue  = allData.reduce((s,d)=>s+d.totalDue,0);
+  const grandPaid = allData.reduce((s,d)=>s+d.manualPaid,0);
+  const grandRem  = allData.reduce((s,d)=>s+d.remaining,0);
+
+  const tabs = [
+    ['overview','🏠 نظرة عامة'],
+    ['statement','📊 كشف الحساب'],
+    ['quantities','📦 تفاصيل الكميات'],
+    ['payments','💳 سجل الحركات'],
+  ];
+
+  const pSel = `<select onchange="window._PF.partner=this.value;nav('partner-financials')"
+    style="border:1px solid #e2e8f0;border-radius:7px;padding:5px 10px;font-family:inherit;font-size:12px;min-width:140px">
+    <option value="">كل الشركاء</option>
+    ${partners.map(p=>`<option value="${p.name}" ${p.name===window._PF.partner?'selected':''}>${p.name}</option>`).join('')}
+  </select>`;
+
+  const dateFilt = `
+    <input type="date" value="${window._PF.from}" title="من"
+      onchange="window._PF.from=this.value;nav('partner-financials')"
+      style="border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12px">
+    <span style="color:#94a3b8;font-size:11px">→</span>
+    <input type="date" value="${window._PF.to}" title="إلى"
+      onchange="window._PF.to=this.value;nav('partner-financials')"
+      style="border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12px">
+    <button class="btn btn-gray btn-sm" onclick="window._PF.from='';window._PF.to='';window._PF.partner='';nav('partner-financials')">✕</button>
+  `;
+
+  const filtered = allData.filter(d=>!window._PF.partner||d.p.name===window._PF.partner);
+
+  let content = '';
+
+  // ── Tab: Overview ─────────────────────────────────────────────
+  if(tab==='overview'){
+    content = `
+      <!-- KPI strip -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+        ${[
+          ['💰 إجمالي المستحق', curr(grandDue), '#d97706'],
+          ['✅ إجمالي المصروف', curr(grandPaid), '#16a34a'],
+          ['⚠️ إجمالي المتبقي', curr(grandRem), grandRem>0?'#dc2626':'#16a34a'],
+        ].map(([l,v,c])=>`
+          <div class="card" style="padding:14px;text-align:center;border-top:3px solid ${c}">
+            <div style="font-size:11px;color:#64748b;margin-bottom:4px">${l}</div>
+            <div style="font-size:16px;font-weight:700;color:${c}">${v}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- Partner cards -->
+      ${filtered.map(({p,matBreakdown,totalM3,totalDue,manualPaid,remaining})=>`
+        <div class="card mb10" style="border-right:4px solid ${remaining>0?'#d97706':'#16a34a'}">
+          <div class="flex-between mb10">
+            <div style="font-size:15px;font-weight:700">🤝 ${p.name}</div>
+            <div style="display:flex;gap:18px">
+              ${[['م³ إجمالي',totalM3.toFixed(1)+'م³','#1d4ed8'],
+                 ['المستحق',curr(totalDue),'#d97706'],
+                 ['المصروف',curr(manualPaid),'#16a34a'],
+                 ['المتبقي',curr(remaining),remaining>0?'#dc2626':'#16a34a']
+                ].map(([l,v,c])=>`<div style="text-align:center">
+                  <div style="font-size:10px;color:#64748b">${l}</div>
+                  <div style="font-size:14px;font-weight:700;color:${c}">${v}</div>
+                </div>`).join('')}
+            </div>
+          </div>
+
+          <!-- Material breakdown -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:10px">
+            ${matBreakdown.map(m=>`
+              <div style="background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e2e8f0">
+                <div style="font-weight:700;font-size:12px;margin-bottom:6px">📦 ${m.mat}</div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#64748b">
+                  <span>${m.m3.toFixed(1)} م³</span>
+                  <span>${m.price} ج.م/م³</span>
+                  <span style="color:#d97706;font-weight:700">${curr(m.amount)}</span>
+                </div>
+                <div style="background:#e2e8f0;border-radius:4px;height:4px;margin-top:6px;overflow:hidden">
+                  <div style="background:#d97706;height:100%;width:${Math.min(100,(m.amount/Math.max(totalDue,1)*100)).toFixed(0)}%"></div>
+                </div>
+              </div>`).join('')||'<div class="text-xs text-gray">لم تُحدَّد أسعار</div>'}
+          </div>
+
+          <!-- Progress bar -->
+          <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden">
+            <div style="background:#16a34a;height:100%;width:${Math.min(100,totalDue>0?manualPaid/totalDue*100:0).toFixed(1)}%;transition:width .5s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:3px">
+            <span>نسبة الصرف: ${totalDue>0?(manualPaid/totalDue*100).toFixed(1):0}%</span>
+            <span>المتبقي: ${curr(remaining)}</span>
+          </div>
+        </div>`).join('')||'<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">🤝</div><p class="text-gray mt8">لا يوجد شركاء</p></div>'}
+    `;
+
+  // ── Tab: Running Statement ────────────────────────────────────
+  } else if(tab==='statement'){
+    const sel = window._PF.partner;
+    if(!sel){
+      content = `<div class="card" style="text-align:center;padding:40px"><div style="font-size:36px">👆</div><p class="text-gray mt8">اختر شريكاً من الفلتر لعرض كشف حسابه</p></div>`;
+    } else {
+      const d = allData.find(x=>x.p.name===sel);
+      if(!d){ content=''; } else {
+        const from=window._PF.from, to=window._PF.to;
+        let runBal=0, txns=[];
+
+        // Earned from sarkis per material
+        d.matBreakdown.forEach(m=>{
+          approvedSarkis.forEach(sk=>{
+            if(sk.material!==m.mat) return;
+            if(from&&sk.date<from) return;
+            if(to&&sk.date>to) return;
+            let skNet=0;
+            (sk.lines||[]).forEach(ln=>{ skNet+=Number(ln.netSell||ln.netCubic)||0; });
+            if(!skNet) return;
+            txns.push({date:sk.date, type:'مستحق', desc:`حافظة #${sk.id} — ${m.mat} (${skNet.toFixed(1)} م³)`, credit:skNet*m.price, debit:0});
+          });
+        });
+
+        // Payments from journal
+        d.payments.forEach(j=>{
+          if(from&&(j.date||'')<from) return;
+          if(to&&(j.date||'')>to) return;
+          if(j.entryType==='يدوي'&&j.debitCode==='3001')
+            txns.push({date:j.date,type:'صرف',desc:j.description||'قيد يدوي',debit:Number(j.debitAmount)||0,credit:0});
+          else if(j.entryType==='يدوي'&&j.creditCode==='3001')
+            txns.push({date:j.date,type:'إضافة',desc:j.description||'قيد يدوي',debit:0,credit:Number(j.creditAmount)||0});
+        });
+
+        txns.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+        const rows = txns.map(t=>{ runBal+=t.credit-t.debit; return {...t,balance:runBal}; });
+        const totC=rows.reduce((s,r)=>s+r.credit,0);
+        const totD=rows.reduce((s,r)=>s+r.debit,0);
+
+        content = `
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr style="background:#1F4E78;color:#fff">
+                <th>التاريخ</th><th>النوع</th><th>البيان</th><th style="text-align:center">مستحق</th><th style="text-align:center">مصروف</th><th style="text-align:center">الرصيد</th>
+              </tr></thead>
+              <tbody>
+                ${rows.map(r=>`<tr>
+                  <td class="text-xs">${fmtDate(r.date)}</td>
+                  <td>${statusBadge(r.type)}</td>
+                  <td class="text-xs">${r.desc}</td>
+                  <td class="tabular text-green" style="text-align:center">${r.credit>0?curr(r.credit):'—'}</td>
+                  <td class="tabular text-red" style="text-align:center">${r.debit>0?curr(r.debit):'—'}</td>
+                  <td class="tabular font-bold" style="text-align:center;color:${r.balance>=0?'#d97706':'#16a34a'}">${curr(Math.abs(r.balance))} ${r.balance>=0?'(مستحق)':'(زيادة)'}</td>
+                </tr>`).join('')||'<tr><td colspan="6" class="tbl-empty"><span class="tbl-empty-icon">📭</span>لا توجد حركات</td></tr>'}
+              </tbody>
+              <tfoot><tr style="background:#FFE699;font-weight:700">
+                <td colspan="3">الإجمالي</td>
+                <td class="tabular text-green" style="text-align:center">${curr(totC)}</td>
+                <td class="tabular text-red" style="text-align:center">${curr(totD)}</td>
+                <td class="tabular" style="text-align:center;color:${runBal>=0?'#d97706':'#16a34a'}">${curr(Math.abs(runBal))} ${runBal>=0?'(مستحق)':'(زيادة)'}</td>
+              </tr></tfoot>
+            </table>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="btn btn-gray btn-sm" onclick="printPartnerStatement('${sel}')">🖨️ طباعة</button>
+            <button class="btn btn-gray btn-sm" onclick="exportPartnerStatementExcel('${sel}')">📊 Excel</button>
+          </div>`;
+      }
+    }
+
+  // ── Tab: Quantities detail ────────────────────────────────────
+  } else if(tab==='quantities'){
+    const from=window._PF.from, to=window._PF.to;
+    content = filtered.map(({p,matBreakdown})=>`
+      <div class="card mb10">
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px">🤝 ${p.name}</div>
+        ${matBreakdown.map(m=>{
+          const lines=[];
+          approvedSarkis.forEach(sk=>{
+            if(sk.material!==m.mat) return;
+            if(from&&sk.date<from) return;
+            if(to&&sk.date>to) return;
+            (sk.lines||[]).forEach(ln=>{
+              const net=Number(ln.netSell||ln.netCubic)||0;
+              if(!net) return;
+              lines.push({date:sk.date,id:sk.id,client:sk.client,plate:ln.plateNo||'',trips:Number(ln.trips)||0,net,amount:net*m.price});
+            });
+          });
+          if(!lines.length) return '';
+          const totNet=lines.reduce((s,l)=>s+l.net,0);
+          const totAmt=lines.reduce((s,l)=>s+l.amount,0);
+          return `<div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:8px">
+            <div class="flex-between mb6">
+              <div style="font-weight:700">📦 ${m.mat} — ${m.price} ج.م/م³</div>
+              <div style="font-size:11px"><strong style="color:#1d4ed8">${totNet.toFixed(1)} م³</strong> | <strong style="color:#d97706">${curr(totAmt)}</strong></div>
+            </div>
+            <div class="tbl-wrap"><table style="font-size:10px">
+              <thead><tr style="background:#334155;color:#fff">
+                <th>التاريخ</th><th>حافظة</th><th>العميل</th><th>السيارة</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">مستحق</th>
+              </tr></thead>
+              <tbody>
+                ${lines.sort((a,b)=>a.date.localeCompare(b.date)).map(l=>`<tr>
+                  <td>${fmtDate(l.date)}</td><td>#${l.id}</td><td>${l.client}</td>
+                  <td dir="ltr">${l.plate}</td>
+                  <td style="text-align:center">${l.trips}</td>
+                  <td style="text-align:center;font-weight:700;color:#1d4ed8">${l.net.toFixed(1)}</td>
+                  <td style="text-align:center;color:#d97706">${curr(l.amount)}</td>
+                </tr>`).join('')}
+              </tbody>
+              <tfoot><tr style="background:#FFE699;font-weight:700">
+                <td colspan="4">الإجمالي</td>
+                <td style="text-align:center">${lines.reduce((s,l)=>s+l.trips,0)}</td>
+                <td style="text-align:center;color:#1d4ed8">${totNet.toFixed(1)}</td>
+                <td style="text-align:center;color:#d97706">${curr(totAmt)}</td>
+              </tr></tfoot>
+            </table></div>
+          </div>`;
+        }).join('')}
+      </div>`).join('')||'<div class="card" style="text-align:center;padding:30px"><p class="text-gray">لا توجد بيانات</p></div>';
+
+  // ── Tab: Payment history ──────────────────────────────────────
+  } else if(tab==='payments'){
+    const from=window._PF.from, to=window._PF.to;
+    const allPmts = [];
+    filtered.forEach(({p,payments})=>{
+      payments.forEach(j=>{
+        if(j.entryType!=='يدوي') return;
+        if(from&&(j.date||'')<from) return;
+        if(to&&(j.date||'')>to) return;
+        const isOut = j.debitCode==='3001';
+        const isIn  = j.creditCode==='3001';
+        if(!isOut&&!isIn) return;
+        allPmts.push({date:j.date,partner:p.name,type:isOut?'صرف':'إضافة',
+          amount:isOut?Number(j.debitAmount)||0:Number(j.creditAmount)||0,
+          desc:j.description||'قيد يدوي',
+          acct:isOut?(j.creditCode+' '+j.creditName):(j.debitCode+' '+j.debitName)});
+      });
+    });
+    allPmts.sort((a,b)=>b.date.localeCompare(a.date));
+    const totOut=allPmts.filter(r=>r.type==='صرف').reduce((s,r)=>s+r.amount,0);
+    const totIn=allPmts.filter(r=>r.type==='إضافة').reduce((s,r)=>s+r.amount,0);
+
+    content = `
+      <div class="alert alert-blue mb10" style="font-size:11px">
+        <span>💳</span>
+        <div>إجمالي المصروف: <strong class="text-red">${curr(totOut)}</strong> — إجمالي الإضافات: <strong class="text-green">${curr(totIn)}</strong></div>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr style="background:#1F4E78;color:#fff">
+          <th>التاريخ</th><th>الشريك</th><th>النوع</th><th>البيان</th><th>الحساب المقابل</th><th style="text-align:center">المبلغ</th>
+        </tr></thead>
+        <tbody>
+          ${allPmts.map(r=>`<tr>
+            <td class="text-xs">${fmtDate(r.date)}</td>
+            <td class="font-bold">${r.partner}</td>
+            <td>${statusBadge(r.type==='صرف'?'دفع':'يدوي')}</td>
+            <td class="text-xs">${r.desc}</td>
+            <td class="text-xs">${r.acct}</td>
+            <td class="tabular font-bold" style="text-align:center;color:${r.type==='صرف'?'#dc2626':'#16a34a'}">${curr(r.amount)}</td>
+          </tr>`).join('')||'<tr><td colspan="6" class="tbl-empty"><span class="tbl-empty-icon">💳</span>لا توجد حركات</td></tr>'}
+        </tbody>
+      </table></div>`;
+  }
+
+  return `<div>
+    <div class="page-header">
+      <div class="section-title" style="margin:0">🤝 الشركاء</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        ${pSel} ${dateFilt}
+        <button class="btn btn-gray btn-sm" onclick="printPartnerStatement(window._PF.partner)">🖨️ طباعة</button>
+        <button class="btn btn-gray btn-sm" onclick="exportPartnerReportExcel()">📊 Excel</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:12px">
+      ${tabs.map(([k,l])=>`<button onclick="window._PF.tab='${k}';nav('partner-financials')"
+        style="padding:9px 16px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:12px;
+        color:${tab===k?'#1d4ed8':'#64748b'};font-weight:${tab===k?'700':'400'};
+        border-bottom:${tab===k?'2px solid #1d4ed8':'2px solid transparent'};margin-bottom:-2px">${l}</button>`).join('')}
+    </div>
+
+    ${content}
+  </div>`;
+}
+
+// ── Print partner statement ───────────────────────────────────────
+function printPartnerStatement(name){
+  const el = document.querySelector('#content .tbl-wrap');
+  if(!el){ toast('اختر شريكاً من كشف الحساب أولاً','error'); return; }
+  const co = DB.getCompany();
+  _pw('كشف حساب الشريك — '+(name||''), printHeaderHTML()
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:8px">كشف حساب الشريك: '+(name||'كل الشركاء')+'</div>'
+    +el.outerHTML);
+}
+
+// ── Excel: partner statement ──────────────────────────────────────
+function exportPartnerStatementExcel(name){
+  if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
+  if(!name){ toast('اختر شريكاً أولاً','error'); return; }
+
+  const co = DB.getCompany();
+  const tbl = document.querySelector('#content .tbl-wrap table');
+  if(!tbl){ toast('لا توجد بيانات في كشف الحساب','error'); return; }
+
+  const rows = [];
+  rows.push([co.name||'شركة الهنا للنقل','','','','','']);
+  rows.push(['كشف حساب الشريك: '+name,'','','','','']);
+  rows.push(['من: '+(window._PF.from||'البداية'),'','','إلى: '+(window._PF.to||'اليوم'),'','']);
+  rows.push([]);
+
+  tbl.querySelectorAll('thead tr, tbody tr, tfoot tr').forEach(tr=>{
+    const cells = Array.from(tr.querySelectorAll('th,td')).map(td=>{
+      let t = (td.textContent||'').trim();
+      const num = Number(t.replace(/[^\d.-]/g,''));
+      return (t.includes('ج.م') && !isNaN(num)) ? num : t;
+    });
+    rows.push(cells);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:14},{wch:14},{wch:30},{wch:16},{wch:16},{wch:20}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'كشف حساب');
+  XLSX.writeFile(wb, 'كشف_حساب_الشريك_'+name+'.xlsx');
+  toast('✅ تم تصدير كشف حساب '+name);
+}
