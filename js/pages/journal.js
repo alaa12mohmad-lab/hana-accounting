@@ -33,8 +33,8 @@ function renderJournal(){
           <td>${statusBadge(j.entryType)}${j._auto?'<span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:1px 5px;margin-right:3px">🤖</span>':''}</td>
           <td><strong>${j.party||'—'}</strong>${j.partyType?`<br><span class="text-xs text-gray">${j.partyType}</span>`:''}</td>
           <td class="tabular font-bold ${j.entryType==='تحصيل'?'text-green':j.entryType==='دفع'?'text-red':'text-brand'}">${curr(j.amount||j.debitAmount||0)}</td>
-          <td class="text-xs text-gray">${j.debitCode?j.debitCode+' '+j.debitName:j.debitAccount||'—'}</td>
-          <td class="text-xs text-gray">${j.creditCode?j.creditCode+' '+j.creditName:j.creditAccount||'—'}</td>
+          <td class="text-xs text-gray">${j.debitCode?j.debitCode+' '+j.debitName:j.debitAccount||'—'}${j.party&&(j.debitCode==='1010'||j.debitCode==='2001'||j.debitCode==='3001')?`<br><span style="color:#1d4ed8;font-weight:600">${j.party}</span>`:''}</td>
+          <td class="text-xs text-gray">${j.creditCode?j.creditCode+' '+j.creditName:j.creditAccount||'—'}${j.party&&(j.creditCode==='1010'||j.creditCode==='2001'||j.creditCode==='3001')?`<br><span style="color:#1d4ed8;font-weight:600">${j.party}</span>`:''}</td>
           <td>${j.paymentType?badge(j.paymentType,'blue'):'—'}</td>
           <td class="font-mono text-xs">${j.reference||'—'}</td>
           <td class="text-gray">${j.description||'—'}</td>
