@@ -80,7 +80,7 @@ const PAGE_TITLES = {
   'income-stmt':'قائمة الدخل والأرباح', accounts:'دليل الحسابات',
   expenses:'المصروفات والوقود', customers:'العملاء وأسعارهم',
   suppliers:'الموردون وأسعارهم', materials:'الخامات',
-  trucks:'السيارات', partners:'الشركاء',
+  trucks:'السيارات', partners:'الشركاء', 'partner-financials':'حسابات الشركاء',
   company:'إعدادات الشركة', users:'إدارة المستخدمين',
   themes:'الثيم والألوان',
   clientQty:'كشف كميات العميل التفصيلي',
