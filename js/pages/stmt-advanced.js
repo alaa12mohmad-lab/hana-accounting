@@ -212,7 +212,13 @@ function renderRunningBal(){
         return sk.client===selEntity && sk.status!=='ملغي'
           && (!from||sk.date>=from) && (!to||sk.date<=to);
       }).forEach(function(sk){
-        txns.push({date:sk.date,type:'فاتورة',desc:'حافظة #'+sk.id+' — '+sk.material,debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id});
+        var trips=0, netM3=0;
+        (sk.lines||[]).forEach(function(ln){
+          trips += Number(ln.trips)||0;
+          netM3 += Number(ln.netSell!=null?ln.netSell:ln.netCubic)||0;
+        });
+        txns.push({date:sk.date,type:'فاتورة',desc:'حافظة #'+sk.id+' — '+sk.material,
+          debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id,trips:trips,netM3:netM3});
       });
       DB.getAll('journal').filter(function(j){
         return j.party===selEntity && j.partyType==='عميل'
@@ -242,7 +248,13 @@ function renderRunningBal(){
         return sk.supplier===selEntity && sk.status!=='ملغي'
           && (!from||sk.date>=from) && (!to||sk.date<=to);
       }).forEach(function(sk){
-        txns2.push({date:sk.date,type:'فاتورة شراء',desc:'حافظة #'+sk.id+' — '+sk.material,debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id});
+        var trips=0, netM3=0;
+        (sk.lines||[]).forEach(function(ln){
+          trips += Number(ln.trips)||0;
+          netM3 += Number(ln.netBuy!=null?ln.netBuy:ln.netCubic)||0;
+        });
+        txns2.push({date:sk.date,type:'فاتورة شراء',desc:'حافظة #'+sk.id+' — '+sk.material,
+          debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id,trips:trips,netM3:netM3});
       });
       DB.getAll('journal').filter(function(j){
         return j.party===selEntity && j.partyType==='مورد'
@@ -294,7 +306,13 @@ function renderRunningBal(){
       : !selEntity
       ? '<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">👆</div><p class="text-gray mt8">اختر '+entLabel+' لعرض كشف الحساب</p></div>'
       : '<div id="rb-table"><div class="tbl-wrap"><table>'
-        +'<thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>'
+        +'<thead><tr>'
+          +'<th>التاريخ</th><th>النوع</th><th>البيان</th>'
+          +'<th style="text-align:center;background:#1a5276;color:#fff">نقلات</th>'
+          +'<th style="text-align:center;background:#1a5276;color:#fff">م³ صافي</th>'
+          +'<th>الرصيد الواصل (مدين)</th><th>الرصيد الواصل (دائن)</th>'
+          +'<th>الرصيد الباقي</th>'
+        +'</tr></thead>'
         +'<tbody>'
         +rows.map(function(r){
           var bal = selType==='client'
@@ -303,10 +321,13 @@ function renderRunningBal(){
           var balCol = selType==='client'
             ? (r.balance>=0?'#dc2626':'#16a34a')
             : (r.balance<=0?'#dc2626':'#16a34a');
+          var hasQty = r.trips!=null || r.netM3!=null;
           return '<tr>'
             +'<td class="text-xs">'+fmtDate(r.date)+'</td>'
             +'<td>'+statusBadge(r.type)+'</td>'
             +'<td class="text-xs">'+r.desc+(r.ref?'  <span style="color:#1F4E78;font-size:9px">'+r.ref+'</span>':'')+'</td>'
+            +'<td class="tabular" style="text-align:center">'+(hasQty?num(r.trips):'—')+'</td>'
+            +'<td class="tabular" style="text-align:center;color:#1a5276;font-weight:700">'+(hasQty?num(r.netM3.toFixed(1)):'—')+'</td>'
             +'<td class="tabular text-red">'+(r.debit>0?curr(r.debit):'—')+'</td>'
             +'<td class="tabular text-green">'+(r.credit>0?curr(r.credit):'—')+'</td>'
             +'<td class="tabular font-bold" style="color:'+balCol+'">'+bal+'</td>'
@@ -315,6 +336,8 @@ function renderRunningBal(){
         +'</tbody>'
         +'<tfoot><tr>'
         +'<td colspan="3" class="font-bold">الإجمالي</td>'
+        +'<td class="tabular font-bold" style="text-align:center">'+num(rows.reduce(function(s,r){return s+(r.trips||0);},0))+'</td>'
+        +'<td class="tabular font-bold" style="text-align:center;color:#1a5276">'+num(rows.reduce(function(s,r){return s+(r.netM3||0);},0).toFixed(1))+'</td>'
         +'<td class="tabular font-bold text-red">'+curr(totalDebit)+'</td>'
         +'<td class="tabular font-bold text-green">'+curr(totalCredit)+'</td>'
         +'<td class="tabular font-bold" style="color:'+balColor+'">'+curr(Math.abs(finalBal))+(selType==='client'?(finalBal>=0?' (مدين)'  :' (دائن)'):(finalBal<=0?' (مستحق)':' (رصيد)'))+'</td>'
@@ -863,8 +886,13 @@ function exportRunningBalExcel(){
     DB.getAll('sarkis').filter(function(sk){
       return sk.client===selEntity&&sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to);
     }).forEach(function(sk){
+      var trips=0, netM3=0;
+      (sk.lines||[]).forEach(function(ln){
+        trips += Number(ln.trips)||0;
+        netM3 += Number(ln.netSell!=null?ln.netSell:ln.netCubic)||0;
+      });
       txns.push({date:sk.date,type:'فاتورة',desc:'حافظة #'+sk.id+' — '+sk.material,
-        debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id});
+        debit:Number(sk.totalSell)||0,credit:0,ref:'#'+sk.id,trips:trips,netM3:netM3});
     });
     DB.getAll('journal').filter(function(j){
       return j.party===selEntity&&j.partyType==='عميل'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to);
@@ -882,8 +910,13 @@ function exportRunningBalExcel(){
     DB.getAll('sarkis').filter(function(sk){
       return sk.supplier===selEntity&&sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to);
     }).forEach(function(sk){
+      var trips=0, netM3=0;
+      (sk.lines||[]).forEach(function(ln){
+        trips += Number(ln.trips)||0;
+        netM3 += Number(ln.netBuy!=null?ln.netBuy:ln.netCubic)||0;
+      });
       txns.push({date:sk.date,type:'فاتورة شراء',desc:'حافظة #'+sk.id+' — '+sk.material,
-        debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id});
+        debit:0,credit:Number(sk.totalBuy)||0,ref:'#'+sk.id,trips:trips,netM3:netM3});
     });
     DB.getAll('journal').filter(function(j){
       return j.party===selEntity&&j.partyType==='مورد'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to);
@@ -898,10 +931,10 @@ function exportRunningBalExcel(){
   txns.sort(function(a,b){ return (a.date||'').localeCompare(b.date||''); });
 
   var header = [
-    [co.name||'شركة الهنا للنقل','','','','كشف الحساب المتحرك','',''],
-    [selEntity,'','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم'),''],
+    [co.name||'شركة الهنا للنقل','','','','','كشف الحساب المتحرك',''],
+    [selEntity,'','','','','من: '+(from||'البداية'),'إلى: '+(to||'اليوم')],
     [],
-    ['التاريخ','النوع','البيان','المرجع','مدين','دائن','الرصيد'],
+    ['التاريخ','النوع','البيان','نقلات','م³ صافي','الرصيد الواصل (مدين)','الرصيد الواصل (دائن)','الرصيد الباقي'],
   ];
 
   var dataRows = txns.map(function(t){
@@ -909,8 +942,9 @@ function exportRunningBalExcel(){
     return [
       t.date ? t.date.split('-').reverse().join('/') : '—',
       t.type,
-      t.desc,
-      t.ref||'',
+      t.desc + (t.ref?'  '+t.ref:''),
+      t.trips!=null ? t.trips : '',
+      t.netM3!=null ? parseFloat(t.netM3.toFixed(1)) : '',
       t.debit||'',
       t.credit||'',
       runBal,
@@ -919,7 +953,9 @@ function exportRunningBalExcel(){
 
   var totDebit  = txns.reduce(function(s,t){ return s+t.debit; },0);
   var totCredit = txns.reduce(function(s,t){ return s+t.credit; },0);
-  var footer = [['','','','الإجمالي',totDebit,totCredit,runBal]];
+  var totTrips  = txns.reduce(function(s,t){ return s+(t.trips||0); },0);
+  var totNetM3  = txns.reduce(function(s,t){ return s+(t.netM3||0); },0);
+  var footer = [['','','الإجمالي',totTrips,parseFloat(totNetM3.toFixed(1)),totDebit,totCredit,runBal]];
 
   xlsxExport(header.concat(dataRows).concat(footer),
     'كشف_حساب_'+selEntity, 'كشف الحساب');
