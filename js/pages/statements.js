@@ -17,7 +17,13 @@ function renderCustStmt(){
 
   const colls=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
-    return j.entryType==='تحصيل'&&j.party===_CS.party&&d>=fd&&d<=td;
+    if(!(d>=fd&&d<=td)) return false;
+    if(j.entryType==='تحصيل'&&j.party===_CS.party) return true;
+    if(j.entryType==='يدوي'&&j.party===_CS.party&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
+    return false;
+  }).map(j=>{
+    if(j.entryType==='يدوي') return {...j, amount:Number(j.creditAmount)||0, paymentType:'قيد يدوي'};
+    return j;
   });
 
   const totalSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
@@ -118,10 +124,10 @@ function renderCustStmt(){
                 <td style="padding:4px 6px">${l.driverName||'—'}</td>
                 <td style="padding:4px 6px;font-family:monospace">${l.plateNo||'—'}</td>
                 <td style="padding:4px 6px;text-align:center">${l.trips||0}</td>
-                <td style="padding:4px 6px;text-align:center">${l.cubicPerTrip||0}</td>
-                <td style="padding:4px 6px;text-align:center">${(l.grossCubic||0).toFixed(1)}</td>
-                <td style="padding:4px 6px;text-align:center;color:#dc2626">${l.discountM||0}</td>
-                <td style="padding:4px 6px;text-align:center;font-weight:700;color:#1F4E78">${(l.netCubic||0).toFixed(1)}</td>
+                <td style="padding:4px 6px;text-align:center">${l.cubicSell!=null?l.cubicSell:(l.cubicPerTrip||0)}</td>
+                <td style="padding:4px 6px;text-align:center">${(l.grossSell!=null?l.grossSell:l.grossCubic||0).toFixed(1)}</td>
+                <td style="padding:4px 6px;text-align:center;color:#dc2626">${l.discountSell!=null?l.discountSell:(l.discountM||0)}</td>
+                <td style="padding:4px 6px;text-align:center;font-weight:700;color:#1F4E78">${(l.netSell!=null?l.netSell:l.netCubic||0).toFixed(1)}</td>
                 <td style="padding:4px 6px;text-align:center">${l.sellPrice||0}</td>
                 <td style="padding:4px 6px;font-weight:600;color:#1F4E78">${curr(l.sellTotal)}</td>
               </tr>`).join('')}
@@ -149,16 +155,16 @@ function renderCustStmt(){
         <strong class="text-green tabular">${curr(totalColl)}</strong>
       </div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البنك</th><th>المرجع</th><th>البيان</th></tr></thead>
+        <thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البنك</th><th>البيان</th></tr></thead>
         <tbody>
           ${colls.map(c=>`<tr>
             <td>${fmtDate(c.date)}</td>
+            <td>${statusBadge(c.entryType==='يدوي'?'تحصيل يدوي':'تحصيل')}</td>
             <td class="tabular font-bold text-green">${curr(c.amount)}</td>
             <td>${badge(c.paymentType||'—','blue')}</td>
             <td class="font-mono">${c.chequeNo||'—'}</td>
             <td class="text-gray">${c.bank||'—'}</td>
-            <td class="font-mono text-gray">${c.reference||'—'}</td>
-            <td class="text-gray">${c.description||'—'}</td>
+            <td class="text-gray">${c.description||(c.entryType==='يدوي'?'قيد يدوي → '+(c.debitCode||'')+' '+(c.debitName||''):'—')}</td>
           </tr>`).join('')||`<tr><td colspan="7" class="tbl-empty">لا توجد تحصيلات</td></tr>`}
           ${colls.length>0?`<tfoot><tr><td colspan="1" style="font-weight:700">الإجمالي</td><td class="tabular text-green font-bold">${curr(totalColl)}</td><td colspan="5"></td></tr></tfoot>`:''}
         </tbody>
@@ -189,7 +195,13 @@ function renderSuppStmt(){
 
   const pmts=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
-    return j.entryType==='دفع'&&j.party===_SS.party&&d>=fd&&d<=td;
+    if(!(d>=fd&&d<=td)) return false;
+    if(j.entryType==='دفع'&&j.party===_SS.party) return true;
+    if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد'&&j.debitCode==='2001') return true;
+    return false;
+  }).map(j=>{
+    if(j.entryType==='يدوي') return {...j, amount:Number(j.debitAmount)||0, paymentType:'قيد يدوي'};
+    return j;
   });
 
   const totalBuy=sarkis.reduce((s,r)=>s+(Number(r.totalBuy)||0),0);
@@ -274,10 +286,10 @@ function renderSuppStmt(){
                 <td style="padding:4px 6px">${l.driverName||'—'}</td>
                 <td style="padding:4px 6px;font-family:monospace">${l.plateNo||'—'}</td>
                 <td style="padding:4px 6px;text-align:center">${l.trips||0}</td>
-                <td style="padding:4px 6px;text-align:center">${l.cubicPerTrip||0}</td>
-                <td style="padding:4px 6px;text-align:center">${(l.grossCubic||0).toFixed(1)}</td>
-                <td style="padding:4px 6px;text-align:center;color:#dc2626">${l.discountM||0}</td>
-                <td style="padding:4px 6px;text-align:center;font-weight:700;color:#1F4E78">${(l.netCubic||0).toFixed(1)}</td>
+                <td style="padding:4px 6px;text-align:center">${l.cubicBuy!=null?l.cubicBuy:(l.cubicPerTrip||0)}</td>
+                <td style="padding:4px 6px;text-align:center">${(l.grossBuy!=null?l.grossBuy:l.grossCubic||0).toFixed(1)}</td>
+                <td style="padding:4px 6px;text-align:center;color:#dc2626">${l.discountBuy!=null?l.discountBuy:(l.discountM||0)}</td>
+                <td style="padding:4px 6px;text-align:center;font-weight:700;color:#1F4E78">${(l.netBuy!=null?l.netBuy:l.netCubic||0).toFixed(1)}</td>
                 <td style="padding:4px 6px;text-align:center">${l.buyPrice||0}</td>
                 <td style="padding:4px 6px;font-weight:600;color:#d97706">${curr(l.buyTotal)}</td>
               </tr>`).join('')}
@@ -304,16 +316,16 @@ function renderSuppStmt(){
         <strong class="text-red tabular">${curr(totalPmt)}</strong>
       </div>
       <div class="tbl-wrap"><table>
-        <thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البنك</th><th>المرجع</th><th>البيان</th></tr></thead>
+        <thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البنك</th><th>البيان</th></tr></thead>
         <tbody>
           ${pmts.map(p=>`<tr>
             <td>${fmtDate(p.date)}</td>
+            <td>${statusBadge(p.entryType==='يدوي'?'دفع يدوي':'دفع')}</td>
             <td class="tabular font-bold text-red">${curr(p.amount)}</td>
             <td>${badge(p.paymentType||'—','yellow')}</td>
             <td class="font-mono">${p.chequeNo||'—'}</td>
             <td class="text-gray">${p.bank||'—'}</td>
-            <td class="font-mono text-gray">${p.reference||'—'}</td>
-            <td class="text-gray">${p.description||'—'}</td>
+            <td class="text-gray">${p.description||(p.entryType==='يدوي'?'قيد يدوي → '+(p.creditCode||'')+' '+(p.creditName||''):'—')}</td>
           </tr>`).join('')||`<tr><td colspan="7" class="tbl-empty">لا توجد مدفوعات</td></tr>`}
         </tbody>
       </table></div>
