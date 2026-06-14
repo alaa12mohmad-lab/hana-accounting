@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function(){
     materials:     typeof renderMaterials==='function'?renderMaterials:function(){return '';},
     trucks:        typeof renderTrucks==='function'?renderTrucks:function(){return '';},
     partners:      typeof renderPartners==='function'?renderPartners:function(){return '';},
+    'partner-financials': typeof renderPartnerFinancials==='function'?renderPartnerFinancials:function(){return '';},
     company:       typeof renderCompany==='function'?renderCompany:function(){return '';},
     users:         typeof renderUsers==='function'?renderUsers:function(){return '';},
     themes:        typeof renderThemes==='function' ? renderThemes : function(){return '<div class="card"><p>ارفع ملف themes.js</p></div>';},
