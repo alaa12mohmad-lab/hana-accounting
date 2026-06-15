@@ -263,7 +263,13 @@ function printCustStmt(){
   const opening=lastStmt?Number(lastStmt.closingBalance)||0:Number(cs?.openingBalance)||0;
   const fd=new Date(_CS.from),td=new Date(_CS.to);
   const sarkis=DB.getAll('sarkis').filter(sk=>{const d=new Date(sk.date);return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);});
-  const colls=DB.getAll('journal').filter(j=>{const d=new Date(j.date);return j.entryType==='تحصيل'&&j.party===_CS.party&&d>=fd&&d<=td;});
+  const colls=DB.getAll('journal').filter(j=>{
+    const d=new Date(j.date);
+    if(!(d>=fd&&d<=td)) return false;
+    if(j.entryType==='تحصيل'&&j.party===_CS.party) return true;
+    if(j.entryType==='يدوي'&&j.party===_CS.party&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
+    return false;
+  }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.creditAmount)||0,paymentType:'قيد يدوي'}:j);
   const totalSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
   const totalColl=colls.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const balance=opening+totalSell-totalColl;
@@ -288,7 +294,13 @@ function printSuppStmt(){
   const opening=lastStmt?Number(lastStmt.closingBalance)||0:Number(ss?.openingBalance)||0;
   const fd=new Date(_SS.from),td=new Date(_SS.to);
   const sarkis=DB.getAll('sarkis').filter(sk=>{const d=new Date(sk.date);return sk.supplier===_SS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_SS.mat==='الكل'||sk.material===_SS.mat);});
-  const pmts=DB.getAll('journal').filter(j=>{const d=new Date(j.date);return j.entryType==='دفع'&&j.party===_SS.party&&d>=fd&&d<=td;});
+  const pmts=DB.getAll('journal').filter(j=>{
+    const d=new Date(j.date);
+    if(!(d>=fd&&d<=td)) return false;
+    if(j.entryType==='دفع'&&j.party===_SS.party) return true;
+    if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد'&&j.debitCode==='2001') return true;
+    return false;
+  }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.debitAmount)||0,paymentType:'قيد يدوي'}:j);
   const totalBuy=sarkis.reduce((s,r)=>s+(Number(r.totalBuy)||0),0);
   const totalPmt=pmts.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const balance=opening+totalBuy-totalPmt;
