@@ -914,7 +914,7 @@ function renderPartnerFinancials(){
             let skNet=0;
             (sk.lines||[]).forEach(ln=>{ skNet+=Number(ln.netSell||ln.netCubic)||0; });
             if(!skNet) return;
-            txns.push({date:sk.date, type:'مستحق', desc:`حافظة #${sk.id} — ${m.mat} (${skNet.toFixed(1)} م³)`, credit:skNet*m.price, debit:0});
+            txns.push({date:sk.date, type:'مستحق', desc:`حافظة #${sk.id}`, material:m.mat, netM3:skNet, credit:skNet*m.price, debit:0});
           });
         });
 
@@ -937,20 +937,23 @@ function renderPartnerFinancials(){
           <div class="tbl-wrap">
             <table>
               <thead><tr style="background:#1F4E78;color:#fff">
-                <th>التاريخ</th><th>النوع</th><th>البيان</th><th style="text-align:center">مستحق</th><th style="text-align:center">مصروف</th><th style="text-align:center">الرصيد</th>
+                <th>التاريخ</th><th>النوع</th><th>البيان</th><th>الخامة</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">مستحق</th><th style="text-align:center">مصروف</th><th style="text-align:center">الرصيد</th>
               </tr></thead>
               <tbody>
                 ${rows.map(r=>`<tr>
                   <td class="text-xs">${fmtDate(r.date)}</td>
                   <td>${statusBadge(r.type)}</td>
                   <td class="text-xs">${r.desc}</td>
+                  <td class="text-xs">${r.material?badge(r.material,'purple'):'—'}</td>
+                  <td class="tabular" style="text-align:center;color:#1d4ed8;font-weight:700">${r.netM3!=null?r.netM3.toFixed(1):'—'}</td>
                   <td class="tabular text-green" style="text-align:center">${r.credit>0?curr(r.credit):'—'}</td>
                   <td class="tabular text-red" style="text-align:center">${r.debit>0?curr(r.debit):'—'}</td>
                   <td class="tabular font-bold" style="text-align:center;color:${r.balance>=0?'#d97706':'#16a34a'}">${curr(Math.abs(r.balance))} ${r.balance>=0?'(مستحق)':'(زيادة)'}</td>
-                </tr>`).join('')||'<tr><td colspan="6" class="tbl-empty"><span class="tbl-empty-icon">📭</span>لا توجد حركات</td></tr>'}
+                </tr>`).join('')||'<tr><td colspan="8" class="tbl-empty"><span class="tbl-empty-icon">📭</span>لا توجد حركات</td></tr>'}
               </tbody>
               <tfoot><tr style="background:#FFE699;font-weight:700">
-                <td colspan="3">الإجمالي</td>
+                <td colspan="4">الإجمالي</td>
+                <td class="tabular" style="text-align:center;color:#1d4ed8">${rows.reduce((s,r)=>s+(r.netM3||0),0).toFixed(1)}</td>
                 <td class="tabular text-green" style="text-align:center">${curr(totC)}</td>
                 <td class="tabular text-red" style="text-align:center">${curr(totD)}</td>
                 <td class="tabular" style="text-align:center;color:${runBal>=0?'#d97706':'#16a34a'}">${curr(Math.abs(runBal))} ${runBal>=0?'(مستحق)':'(زيادة)'}</td>
