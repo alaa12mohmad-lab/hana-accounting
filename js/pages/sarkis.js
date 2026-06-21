@@ -211,6 +211,8 @@ function kpi(label, val, icon, color){
 
 
 function openSarkiModal(editId){
+  // Cache loaders for dropdown
+  window._LOADERS = DB.getAll('loaders');
   _SK_EDIT=editId||null;
   const sk=editId?DB.getById('sarkis',editId):null;
   const customers=DB.getAll('customers');
@@ -221,7 +223,7 @@ function openSarkiModal(editId){
   if(sk){ _SK_LINES=(sk.lines||[]).map(l=>({...l})); }
   else{
     const mat=materials[0];
-    _SK_LINES=[{driverName:'',plateNo:'',truckId:'',trips:'',cubicPerTrip:'',discountM:0,
+    _SK_LINES=[{driverName:'',plateNo:'',truckId:'',trips:'',cubicPerTrip:'',discountM:0,loaderName:'',
       sellPrice:mat?.defaultSellPrice||'',buyPrice:mat?.defaultBuyPrice||'',
       grossCubic:0,netCubic:0,sellTotal:0,buyTotal:0,profit:0}];
   }
@@ -276,6 +278,7 @@ function openSarkiModal(editId){
             <th style="padding:6px 4px;min-width:85px">مبيعات</th>
             <th style="padding:6px 4px;min-width:85px">تكلفة</th>
             <th style="padding:6px 4px;min-width:85px">ربح</th>
+            <th style="padding:6px 4px;min-width:100px;background:#7c3aed;color:#fff" title="لودر التحميل لهذا السطر">لودر</th>
             <th style="padding:6px 4px"></th>
           </tr>
         </thead>
@@ -384,6 +387,13 @@ function renderSkLines(){
       <td class="calc-cell nowrap text-brand" id="sk-s-${i}">${curr(line.sellTotal)}</td>
       <td class="calc-cell nowrap text-gray" id="sk-b-${i}">${curr(line.buyTotal)}</td>
       <td class="calc-cell nowrap font-bold ${(line.profit||0)>=0?'text-green':'text-red'}" id="sk-p-${i}">${curr(line.profit)}</td>
+      <td style="padding:2px 3px">
+        <select data-idx="${i}" onchange="_SK_LINES[Number(this.dataset.idx)].loaderName=this.value"
+          style="width:90px;font-size:9px;border:1px solid #7c3aed;border-radius:4px;padding:2px 3px;font-family:inherit">
+          <option value="">— لودر —</option>
+          ${(window._LOADERS||[]).map(function(ld){return '<option value="'+ld.name+'"'+(line.loaderName===ld.name?' selected':'')+'>'+ld.name+'</option>';}).join('')}
+        </select>
+      </td>
       <td>${_SK_LINES.length>1?`<button style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:13px;padding:2px" onclick="removeSkLine(${i})">✕</button>`:''}</td>
     </tr>`).join('');
   updateSkFoot();
