@@ -795,7 +795,8 @@ function renderPartnerFinancials(){
       totalM3 += m3; totalDue += m3*price;
     });
 
-    const payments = DB.getAll('journal').filter(j=>j.party===p.name&&j.partyType==='شريك');
+    // قيود النقل/الخامات فقط — قيود اللودر (loaderId) لها حساب منفصل تماماً
+    const payments = DB.getAll('journal').filter(j=>j.party===p.name&&j.partyType==='شريك'&&!j.loaderId);
     const manualPaid = payments.filter(j=>j.entryType==='يدوي'&&j.debitCode==='3001')
       .reduce((s,j)=>s+(Number(j.debitAmount)||0),0);
     const remaining = totalDue - manualPaid;
