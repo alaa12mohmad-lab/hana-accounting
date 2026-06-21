@@ -86,7 +86,7 @@ function renderLoaderList(loaders){
         ? Number(ld.purchasePrice)/Number(ld.usefulLifeMonths) : 0;
       const totalDep = monthlyDep * monthsDep;
 
-      const netProfit = totalRevenue - totalExpenses - totalDep;
+      const netProfit = totalRevenue - totalExpenses; // الإهلاك لا يؤثر على الربح التشغيلي
       const statusCol = ld.status==='نشط' ? '#16a34a' : '#94a3b8';
 
       return `<div class="card" style="border-right:4px solid ${statusCol}">
@@ -111,7 +111,7 @@ function renderLoaderList(loaders){
           ${[
             ['إيراد الشهر','💰',curr(monthRevenue),'#1d4ed8'],
             ['إجمالي م³','📦',totalM3.toFixed(1)+' م³','#7c3aed'],
-            ['مصاريف','💸',curr(totalExpenses+totalDep),'#d97706'],
+            ['مصاريف','💸',curr(totalExpenses),'#d97706'],
             ['صافي الربح','📈',curr(netProfit),netProfit>=0?'#16a34a':'#dc2626'],
           ].map(([l,ic,v,col])=>`
             <div style="background:#f8fafc;border-radius:8px;padding:8px;text-align:center">
@@ -119,6 +119,9 @@ function renderLoaderList(loaders){
               <div style="font-size:13px;font-weight:700;color:${col};margin-top:2px">${v}</div>
             </div>`).join('')}
         </div>
+        ${ld.purchasePrice?`<div class="text-xs" style="color:#94a3b8;background:#f8fafc;border-radius:6px;padding:5px 8px;margin-bottom:8px">
+          📊 للمطالعة فقط — إهلاك متراكم: ${curr(totalDep)} (لا يدخل في حساب الربح)
+        </div>`:''}
 
         <!-- Partners -->
         ${(ld.partners||[]).length>0?`
@@ -248,7 +251,7 @@ function renderLoaderReport(loaders){
     : new Date().getMonth()+1;
   const periodDep = monthlyDep * periodMonths;
 
-  const totalCosts = totalExp + periodDep;
+  const totalCosts = totalExp; // الإهلاك مفصول تماماً عن حساب الربح والمصاريف
   const netProfit  = totalRevenue - totalCosts;
 
   // Partner profit shares
@@ -264,8 +267,7 @@ function renderLoaderReport(loaders){
             <div style="font-size:20px;font-weight:700">🚜 ${ld.name}</div>
             <div style="font-size:11px;opacity:.8;margin-top:4px">
               ${from||'منذ البداية'} — ${to||'إلى اليوم'} |
-              تكلفة: ${curr(ld.purchasePrice||0)} |
-              إهلاك شهري: ${curr(monthlyDep)}
+              تكلفة الشراء: ${curr(ld.purchasePrice||0)}
             </div>
           </div>
           <div style="text-align:center;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 20px">
@@ -328,9 +330,6 @@ function renderLoaderReport(loaders){
               <div style="font-size:13px;font-weight:700;color:${col}">${curr(v)}</div>
             </div>`).join('')}
         </div>
-        <div style="background:#fef9ee;border-radius:8px;padding:10px;font-size:11px;border:1px dashed #d97706">
-          🕐 إهلاك الفترة (${periodMonths} شهر × ${curr(monthlyDep)}/شهر) = <strong>${curr(periodDep)}</strong>
-        </div>
         ${jExpenses.length>0?`
         <div class="tbl-wrap mt8"><table style="font-size:10px">
           <thead><tr style="background:#dc2626;color:#fff">
@@ -347,9 +346,24 @@ function renderLoaderReport(loaders){
         </table></div>`:'<div class="text-xs text-gray mt8 text-center">أضف المصاريف من دفتر اليومية مع تحديد هذا اللودر</div>'}
       </div>
 
+      <!-- Depreciation (informational only - does NOT affect profit) -->
+      <div class="card mb10" style="background:#f8fafc;border:1px dashed #94a3b8">
+        <div class="flex-between">
+          <div>
+            <div style="font-weight:700;font-size:12px;color:#64748b">📊 الإهلاك (للمطالعة فقط)</div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:2px">هذا الرقم لا يؤثر على الربح أو توزيعه على الشركاء — فقط لمتابعة استهلاك قيمة الأصل</div>
+          </div>
+          <div style="text-align:left">
+            <div style="font-size:10px;color:#94a3b8">إهلاك شهري: ${curr(monthlyDep)}</div>
+            <div style="font-size:16px;font-weight:700;color:#64748b">${curr(periodDep)}</div>
+            <div style="font-size:9px;color:#94a3b8">(${periodMonths} شهر من الفترة المحددة)</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Profit distribution -->
       <div class="card mb10">
-        <div class="section-title mb8" style="margin:0 0 10px">💰 توزيع الأرباح</div>
+        <div class="section-title mb8" style="margin:0 0 10px">💰 توزيع الأرباح (بدون احتساب الإهلاك)</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
           ${[{partnerName:'الشركة',ownershipPct:companyPct,paidAmount:0},...partners].map(pt=>{
             const share = netProfit * Number(pt.ownershipPct)/100;
