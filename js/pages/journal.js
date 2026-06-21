@@ -48,14 +48,15 @@ function renderJournal(){
   </div>`;
 }
 
-function openJrnModal(type,editId){
+function openJrnModal(type,editId,prefill){
   const j=editId?DB.getById('journal',editId):null;
+  const pf=prefill||{};
   const t=j?.entryType||type;
   const customers=DB.getAll('customers');
   const suppliers=DB.getAll('suppliers');
   const accts=DB.getAll('accounts').sort((a,b)=>a.code.localeCompare(b.code));
   const PTYPES=['نقدي','تحويل بنكي','شيك فوري','شيك آجل','تحويل محفظة','كاش'];
-  const v=(k,d='')=>j?.[k]??d;
+  const v=(k,d='')=>j?.[k]??pf[k]??d;
   const acctOpts=accts.map(a=>`<option value="${a.code}|${a.name}">${a.code} — ${a.name}</option>`).join('');
   const custOpts=customers.map(c=>`<option ${v('party')===c.name?'selected':''}>${c.name}</option>`).join('');
   const suppOpts=suppliers.map(s=>`<option ${v('party')===s.name?'selected':''}>${s.name}</option>`).join('');
@@ -154,6 +155,7 @@ function openJrnModal(type,editId){
               <option ${v('loaderExpType')==='سولار'?'selected':''}>سولار</option>
               <option ${v('loaderExpType')==='صيانة'?'selected':''}>صيانة</option>
               <option ${v('loaderExpType')==='راتب سائق'?'selected':''}>راتب سائق</option>
+              <option ${v('loaderExpType')==='توزيع أرباح'?'selected':''}>توزيع أرباح</option>
             </select>
           </div>
         </div>
@@ -165,22 +167,23 @@ function openJrnModal(type,editId){
      <button class="btn btn-primary" onclick="saveJrn('${t}',${editId||'null'})">💾 حفظ القيد</button>`,
     'modal-md');
 
-  // Restore values for manual edit
-  if(j&&j.entryType==='يدوي'){
+  // Restore values for manual edit OR apply prefill for a new entry
+  if((j&&j.entryType==='يدوي') || (!j && type==='يدوي' && prefill)){
+    const src = j || pf;
     setTimeout(()=>{
-      if(j.debitCode){
+      if(src.debitCode){
         const ds=document.getElementById('jn-debit-acct');
-        if(ds)for(let o of ds.options)if(o.value.startsWith(j.debitCode+'|')){ds.value=o.value;onJrnAcctChange('debit',ds);}
+        if(ds)for(let o of ds.options)if(o.value.startsWith(src.debitCode+'|')){ds.value=o.value;onJrnAcctChange('debit',ds);}
       }
-      if(j.creditCode){
+      if(src.creditCode){
         const cs=document.getElementById('jn-credit-acct');
-        if(cs)for(let o of cs.options)if(o.value.startsWith(j.creditCode+'|')){cs.value=o.value;onJrnAcctChange('credit',cs);}
+        if(cs)for(let o of cs.options)if(o.value.startsWith(src.creditCode+'|')){cs.value=o.value;onJrnAcctChange('credit',cs);}
       }
-      if(j.party){
+      if(src.party){
         const dp=document.getElementById('jn-debit-party');
         const cp=document.getElementById('jn-credit-party');
-        if(dp)for(let o of dp.options)if(o.value===j.party)dp.value=j.party;
-        if(cp)for(let o of cp.options)if(o.value===j.party)cp.value=j.party;
+        if(dp)for(let o of dp.options)if(o.value===src.party)dp.value=src.party;
+        if(cp)for(let o of cp.options)if(o.value===src.party)cp.value=src.party;
       }
     },80);
   }
