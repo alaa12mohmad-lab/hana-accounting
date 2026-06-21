@@ -236,6 +236,7 @@ function importSarkisFromExcel(){
         const trips        = Number(r['عدد النقلات']    || r['نقلات'] || 0);
         // يقرأ تكعيب العميل والمورد منفصلين - أو م³ للنقلة القديم للتوافق
         const _cubicOld    = Number(r['م³ للنقلة'] || r['م3/نقلة'] || r['م³/نقلة'] || 0);
+        const loaderNameIn = String(r['لودر التحميل']||r['اللودر']||'').trim();
         const cubicSellIn  = Number(r['م³ عميل للنقلة'] || r['تكعيب العميل'] || 0) || _cubicOld;
         const cubicBuyIn   = Number(r['م³ مورد للنقلة'] || r['تكعيب المورد'] || 0) || _cubicOld;
         const cubicPerTrip = cubicSellIn; // للتوافق مع الكود القديم
@@ -250,6 +251,7 @@ function importSarkisFromExcel(){
         const netB = Math.max(0, trips*cubicBuyIn  - discountBuy);
         return {
           driverName:   String(r['اسم السائق']  || '').trim(),
+          loaderName:   loaderNameIn,
           plateNo:      String(r['رقم اللوحة']  || '').trim(),
           trips, cubicPerTrip,
           cubicSell:    cubicSellIn,
