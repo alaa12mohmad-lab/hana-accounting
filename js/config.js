@@ -9,7 +9,7 @@ const FB_CONFIG_KEY  = 'hana_fb_config';
 const COLLECTIONS = [
   'customers','suppliers','materials','trucks',
   'partners','accounts','journal','sarkis',
-  'cheques','statements','expenses','notes',
+  'cheques','statements','expenses','notes','loaders',
 ];
 
 // ── Roles & Permissions ──────────────────────────────────────────
@@ -80,7 +80,7 @@ const PAGE_TITLES = {
   'income-stmt':'قائمة الدخل والأرباح', accounts:'دليل الحسابات',
   expenses:'المصروفات والوقود', customers:'العملاء وأسعارهم',
   suppliers:'الموردون وأسعارهم', materials:'الخامات',
-  trucks:'السيارات', partners:'الشركاء', 'partner-financials':'حسابات الشركاء',
+  trucks:'السيارات', partners:'الشركاء', loaders:'اللوادر وآلات التحميل', 'partner-financials':'حسابات الشركاء',
   company:'إعدادات الشركة', users:'إدارة المستخدمين',
   themes:'الثيم والألوان',
   clientQty:'كشف كميات العميل التفصيلي',
