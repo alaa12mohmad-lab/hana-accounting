@@ -248,11 +248,12 @@ function getSupplierBalance(name){
   return ob+buys-pmts-manualPmts;
 }
 function getPartnerManualBalance(name){
-  // قيود يدوية تؤثر على حساب الشريك (3001)
+  // قيود يدوية تؤثر على حساب الشريك (3001) من جهة النقل/الخامات فقط
+  // (قيود اللودر مستثناة لأن لها حساب منفصل تماماً عبر loaderId)
   // مدين 3001 = خصم من مستحق الشريك (تم الصرف له)
   // دائن 3001 = إضافة لمستحق الشريك
   const entries = DB.getAll('journal').filter(j=>
-    j.entryType==='يدوي' && j.party===name && j.partyType==='شريك'
+    j.entryType==='يدوي' && j.party===name && j.partyType==='شريك' && !j.loaderId
   );
   let net = 0;
   entries.forEach(j=>{
