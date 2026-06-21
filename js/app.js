@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', function(){
     supplierQty:   typeof renderSupplierQty==='function'?renderSupplierQty:function(){return '';},
     backup:        typeof renderBackup==='function'?renderBackup:function(){return ''},
     invitations:   typeof renderInvitations==='function'?renderInvitations:function(){return '';},
+    loaders:       typeof renderLoaders==='function'?renderLoaders:function(){return '';},
   });
 
   // Date in topbar
