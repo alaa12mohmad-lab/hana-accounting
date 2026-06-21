@@ -3,6 +3,43 @@
 window._LD_TAB = 'list';
 window._LD_SEL = null; // selected loader id
 
+// ── Helper: cumulative net profit of a loader since purchase (no date filter) ──
+function getLoaderCumulativeProfit(ld){
+  const allSarkis = DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي');
+  let revenue = 0;
+  allSarkis.forEach(sk=>{
+    (sk.lines||[]).forEach(ln=>{
+      if(ln.loaderName!==ld.name) return;
+      const net   = Number(ln.netSell||ln.netCubic)||0;
+      const price = getLoaderPrice(ld, sk.material);
+      revenue += net*price;
+    });
+  });
+  const jExpenses = DB.getAll('journal').filter(j=>j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح');
+  const expenses = jExpenses.reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
+  return revenue - expenses; // بدون إهلاك — الربح التشغيلي الصافي منذ الشراء
+}
+
+// ── Helper: total profit already disbursed to a specific partner for a loader ──
+function getLoaderPartnerDisbursed(loaderId, partnerName){
+  return DB.getAll('journal').filter(j=>
+    j.entryType==='يدوي' && j.loaderId===loaderId &&
+    j.loaderExpType==='توزيع أرباح' &&
+    j.party===partnerName && j.partyType==='شريك' &&
+    j.debitCode==='3001'
+  ).reduce((s,j)=>s+(Number(j.debitAmount)||0),0);
+}
+
+// ── Open prefilled manual journal entry to disburse profit to a partner ──
+function openLoaderDisburseModal(loaderId, partnerName){
+  openJrnModal('يدوي', null, {
+    debitCode:'3001', debitName:'حسابات الشركاء',
+    party:partnerName, partyType:'شريك',
+    loaderId:loaderId, loaderExpType:'توزيع أرباح',
+    description:'صرف أرباح من اللودر — '+partnerName,
+  });
+}
+
 // ── Main render ───────────────────────────────────────────────────
 function renderLoaders(){
   const tab = window._LD_TAB;
@@ -72,9 +109,9 @@ function renderLoaderList(loaders){
         });
       });
 
-      // Expenses from journal
+      // Expenses from journal (مصاريف فقط — توزيعات الأرباح ليست مصروفاً)
       const jExpenses = DB.getAll('journal').filter(j=>
-        (j.entryType==='يدوي'||j.category) && j.loaderId===ld.id
+        (j.entryType==='يدوي'||j.category) && j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح'
       );
       const totalExpenses = jExpenses.reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
 
@@ -131,12 +168,20 @@ function renderLoaderList(loaders){
             ${(ld.partners||[]).map(pt=>{
               const ownershipAmt = ld.purchasePrice ? Number(ld.purchasePrice)*Number(pt.ownershipPct)/100 : 0;
               const debt = Math.max(0, ownershipAmt - Number(pt.paidAmount||0));
-              const share = netProfit * Number(pt.ownershipPct)/100;
-              return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;min-width:140px">
+              const cumProfit  = getLoaderCumulativeProfit(ld); // ربح تشغيلي صافٍ منذ الشراء (بدون إهلاك)
+              const cumShare   = cumProfit * Number(pt.ownershipPct)/100;
+              const disbursed  = getLoaderPartnerDisbursed(ld.id, pt.partnerName);
+              const remaining  = cumShare - disbursed;
+              return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;min-width:160px">
                 <div style="font-weight:700;font-size:11px">${pt.partnerName}</div>
                 <div style="font-size:10px;color:#7c3aed">${pt.ownershipPct}% ملكية</div>
-                <div style="font-size:10px;color:#16a34a">حصة الربح: ${curr(share)}</div>
-                ${debt>0?`<div style="font-size:10px;color:#d97706">عهدة: ${curr(debt)}</div>`:''}
+                <div style="font-size:10px;color:#16a34a">إجمالي حصته من الربح: ${curr(cumShare)}</div>
+                <div style="font-size:10px;color:#64748b">مصروف له فعلياً: ${curr(disbursed)}</div>
+                <div style="font-size:11px;font-weight:700;color:${remaining>0?'#d97706':'#16a34a'}">المتبقي له: ${curr(remaining)}</div>
+                ${debt>0?`<div style="font-size:10px;color:#dc2626">⚠️ عهدة شراء: ${curr(debt)}</div>`:''}
+                ${remaining>0?`<button class="btn btn-sm" data-lid="${ld.id}" data-pname="${pt.partnerName}"
+                  onclick="openLoaderDisburseModal(Number(this.dataset.lid),this.dataset.pname)"
+                  style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit;margin-top:4px;width:100%">💸 صرف ربح</button>`:''}
               </div>`;
             }).join('')}
           </div>
@@ -330,13 +375,13 @@ function renderLoaderReport(loaders){
               <div style="font-size:13px;font-weight:700;color:${col}">${curr(v)}</div>
             </div>`).join('')}
         </div>
-        ${jExpenses.length>0?`
+        ${jExpenses.filter(j=>j.loaderExpType!=='توزيع أرباح').length>0?`
         <div class="tbl-wrap mt8"><table style="font-size:10px">
           <thead><tr style="background:#dc2626;color:#fff">
             <th>التاريخ</th><th>نوع المصروف</th><th>البيان</th><th style="text-align:center">المبلغ</th>
           </tr></thead>
           <tbody>
-            ${jExpenses.map(j=>`<tr>
+            ${jExpenses.filter(j=>j.loaderExpType!=='توزيع أرباح').map(j=>`<tr>
               <td>${fmtDate(j.date)}</td>
               <td>${badge(j.loaderExpType||'أخرى','gray')}</td>
               <td class="text-xs">${j.description||j.notes||'—'}</td>
@@ -363,20 +408,58 @@ function renderLoaderReport(loaders){
 
       <!-- Profit distribution -->
       <div class="card mb10">
-        <div class="section-title mb8" style="margin:0 0 10px">💰 توزيع الأرباح (بدون احتساب الإهلاك)</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
-          ${[{partnerName:'الشركة',ownershipPct:companyPct,paidAmount:0},...partners].map(pt=>{
-            const share = netProfit * Number(pt.ownershipPct)/100;
-            const ownershipAmt = ld.purchasePrice ? Number(ld.purchasePrice)*Number(pt.ownershipPct)/100 : 0;
-            const debt = pt.partnerName==='الشركة' ? 0 : Math.max(0, ownershipAmt - Number(pt.paidAmount||0));
-            return `<div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
-              <div style="font-weight:700">${pt.partnerName==='الشركة'?'🏢':'🤝'} ${pt.partnerName}</div>
-              <div style="font-size:11px;color:#7c3aed;margin:4px 0">${pt.ownershipPct}% ملكية</div>
-              <div style="font-size:13px;font-weight:700;color:${share>=0?'#16a34a':'#dc2626'}">${curr(share)}</div>
-              ${debt>0?`<div style="font-size:10px;color:#d97706;margin-top:4px">⚠️ عهدة: ${curr(debt)}</div>`:''}
-            </div>`;
-          }).join('')}
+        <div class="section-title mb8" style="margin:0 0 10px">💰 توزيع الأرباح</div>
+        <div class="text-xs text-gray mb8">
+          الأرقام أدناه <strong>تراكمية منذ شراء اللودر</strong> (وليست محصورة بالفترة المختارة أعلاه) — لأن المتبقي للشريك حساب جارٍ مستمر
         </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+          ${(()=>{
+            const cumProfit = getLoaderCumulativeProfit(ld);
+            return [{partnerName:'الشركة',ownershipPct:companyPct,paidAmount:0},...partners].map(pt=>{
+              const cumShare  = cumProfit * Number(pt.ownershipPct)/100;
+              const ownershipAmt = ld.purchasePrice ? Number(ld.purchasePrice)*Number(pt.ownershipPct)/100 : 0;
+              const debt = pt.partnerName==='الشركة' ? 0 : Math.max(0, ownershipAmt - Number(pt.paidAmount||0));
+              const disbursed = pt.partnerName==='الشركة' ? 0 : getLoaderPartnerDisbursed(ld.id, pt.partnerName);
+              const remaining = cumShare - disbursed;
+              return `<div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+                <div style="font-weight:700">${pt.partnerName==='الشركة'?'🏢':'🤝'} ${pt.partnerName}</div>
+                <div style="font-size:11px;color:#7c3aed;margin:4px 0">${pt.ownershipPct}% ملكية</div>
+                <div style="font-size:11px;color:#16a34a">إجمالي حصته: ${curr(cumShare)}</div>
+                ${pt.partnerName!=='الشركة'?`
+                <div style="font-size:11px;color:#64748b">مصروف له: ${curr(disbursed)}</div>
+                <div style="font-size:13px;font-weight:700;color:${remaining>=0?'#d97706':'#dc2626'};margin-top:2px">المتبقي له: ${curr(remaining)}</div>
+                ${debt>0?`<div style="font-size:10px;color:#dc2626;margin-top:4px">⚠️ عهدة شراء: ${curr(debt)}</div>`:''}
+                ${remaining>0?`<button data-lid="${ld.id}" data-pname="${pt.partnerName}"
+                  onclick="openLoaderDisburseModal(Number(this.dataset.lid),this.dataset.pname)"
+                  style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit;margin-top:6px;width:100%">💸 صرف ربح</button>`:''}
+                `:`<div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-top:2px">(لا تحتاج صرفاً)</div>`}
+              </div>`;
+            }).join('');
+          })()}
+        </div>
+
+        <!-- Disbursement log -->
+        ${(()=>{
+          const distEntries = DB.getAll('journal').filter(j=>
+            j.entryType==='يدوي' && j.loaderId===ld.id && j.loaderExpType==='توزيع أرباح'
+          ).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+          if(!distEntries.length) return '';
+          return `
+          <div class="text-xs font-bold mt12 mb6" style="color:#374151">📋 سجل الصرف</div>
+          <div class="tbl-wrap"><table style="font-size:10px">
+            <thead><tr style="background:#374151;color:#fff">
+              <th>التاريخ</th><th>الشريك</th><th>البيان</th><th style="text-align:center">المبلغ</th>
+            </tr></thead>
+            <tbody>
+              ${distEntries.map(j=>`<tr>
+                <td>${fmtDate(j.date)}</td>
+                <td class="font-bold">${j.party}</td>
+                <td class="text-xs">${j.description||'—'}</td>
+                <td style="text-align:center;color:#16a34a;font-weight:700">${curr(j.debitAmount||0)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table></div>`;
+        })()}
       </div>
     </div>`;
 }
