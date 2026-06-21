@@ -31,7 +31,7 @@ function renderJournal(){
           <td class="text-gray text-xs">${filtered.length-idx}</td>
           <td>${fmtDate(j.date)}</td>
           <td>${statusBadge(j.entryType)}${j._auto?'<span style="font-size:9px;background:#eff6ff;color:#1d4ed8;border-radius:10px;padding:1px 5px;margin-right:3px">🤖</span>':''}</td>
-          <td><strong>${j.party||'—'}</strong>${j.partyType?`<br><span class="text-xs text-gray">${j.partyType}</span>`:''}</td>
+          <td><strong>${j.party||'—'}</strong>${j.partyType?`<br><span class="text-xs text-gray">${j.partyType}</span>`:''}${j.loaderId?`<br><span class="text-xs" style="color:#7c3aed">🚜 ${DB.getById('loaders',j.loaderId)?.name||''}${j.loaderExpType?' — '+j.loaderExpType:''}</span>`:''}</td>
           <td class="tabular font-bold ${j.entryType==='تحصيل'?'text-green':j.entryType==='دفع'?'text-red':'text-brand'}">${curr(j.amount||j.debitAmount||0)}</td>
           <td class="text-xs text-gray">${j.debitCode?j.debitCode+' '+j.debitName:j.debitAccount||'—'}${j.party&&(j.debitCode==='1010'||j.debitCode==='2001'||j.debitCode==='3001')?`<br><span style="color:#1d4ed8;font-weight:600">${j.party}</span>`:''}</td>
           <td class="text-xs text-gray">${j.creditCode?j.creditCode+' '+j.creditName:j.creditAccount||'—'}${j.party&&(j.creditCode==='1010'||j.creditCode==='2001'||j.creditCode==='3001')?`<br><span style="color:#1d4ed8;font-weight:600">${j.party}</span>`:''}</td>
@@ -138,7 +138,26 @@ function openJrnModal(type,editId){
         </div>
       </div>
       <div id="jn-balance-ind" class="alert alert-blue" style="font-size:11px;padding:7px 10px">أدخل المبلغين للتحقق من التوازن</div>
-      <div class="form-group mt10"><label><span class="req">*</span>البيان</label><input id="jn-desc" value="${v('description')}" placeholder="وصف القيد"></div>`;
+      <div class="form-group mt10"><label><span class="req">*</span>البيان</label><input id="jn-desc" value="${v('description')}" placeholder="وصف القيد"></div>
+      <div style="background:#f5f3ff;border-radius:8px;padding:10px;margin-top:8px;border:1px dashed #7c3aed">
+        <div style="color:#7c3aed;font-weight:700;font-size:11px;margin-bottom:6px">🚜 ربط بلودر (اختياري — لمصاريف السولار/الصيانة/الراتب)</div>
+        <div class="form-row fr2">
+          <div class="form-group" style="margin-bottom:0"><label>اللودر</label>
+            <select id="jn-loader">
+              <option value="">— بدون ربط —</option>
+              ${DB.getAll('loaders').map(ld=>`<option value="${ld.id}" ${v('loaderId')==ld.id?'selected':''}>${ld.name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0"><label>نوع المصروف</label>
+            <select id="jn-loader-exptype">
+              <option value="">— عام —</option>
+              <option ${v('loaderExpType')==='سولار'?'selected':''}>سولار</option>
+              <option ${v('loaderExpType')==='صيانة'?'selected':''}>صيانة</option>
+              <option ${v('loaderExpType')==='راتب سائق'?'selected':''}>راتب سائق</option>
+            </select>
+          </div>
+        </div>
+      </div>`;
   }
 
   openModal(editId?'تعديل قيد':(t==='تحصيل'?'📥 تحصيل من عميل':t==='دفع'?'📤 دفع لمورد':'📝 قيد يدوي'),body,
@@ -316,6 +335,9 @@ function saveJrn(type,editId){
       debitAmount:dAmt, creditAmount:cAmt,
       reference:document.getElementById('jn-ref')?.value||'',
       description:desc,
+      amount:dAmt, // alias so loader expense totals can read j.amount uniformly
+      loaderId:document.getElementById('jn-loader')?.value?Number(document.getElementById('jn-loader').value):null,
+      loaderExpType:document.getElementById('jn-loader-exptype')?.value||'',
     };
   }
   if(editId){DB.update('journal',editId,data);toast('تم التعديل ✓');}
