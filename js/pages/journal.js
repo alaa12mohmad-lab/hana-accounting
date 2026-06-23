@@ -146,7 +146,7 @@ function openJrnModal(type,editId,prefill){
           <div class="form-group" style="margin-bottom:0"><label>اللودر</label>
             <select id="jn-loader">
               <option value="">— بدون ربط —</option>
-              ${DB.getAll('loaders').map(ld=>`<option value="${ld.id}" ${v('loaderId')==ld.id?'selected':''}>${ld.name}</option>`).join('')}
+              ${(()=>{try{return DB.getAll('loaders').map(ld=>`<option value="${ld.id}" ${v('loaderId')==ld.id?'selected':''}>${ld.name}</option>`).join('');}catch(e){return '';}})()}
             </select>
           </div>
           <div class="form-group" style="margin-bottom:0"><label>نوع المصروف</label>
