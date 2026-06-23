@@ -1,19 +1,79 @@
 // ═══ STATEMENTS ═══
 
+// ════════════════════════════════════════════════════════
+// HELPER: حساب رصيد أول المدة لعميل/مورد قبل تاريخ معين
+// ════════════════════════════════════════════════════════
+function _calcOpeningBefore(type, partyName, beforeDate){
+  const isCust = type==='customer';
+  let base = 0;
+  if(isCust){
+    const c = DB.getAll('customers').find(x=>x.name===partyName);
+    base = Number(c?.openingBalance)||0;
+  } else {
+    const s = DB.getAll('suppliers').find(x=>x.name===partyName);
+    base = Number(s?.openingBalance)||0;
+  }
+
+  // آخر مستخلص معتمد قبل تاريخ البداية
+  const stmts = DB.getAll('statements')
+    .filter(s=>s.entityName===partyName && s.type===(isCust?'customer':'supplier') && s.status==='معتمد')
+    .sort((a,b)=>b.approvedAt-a.approvedAt);
+  const lastStmt = stmts.find(s=> new Date(s.toDate) < new Date(beforeDate));
+
+  let fromDate = null; // نقطة البداية للحساب التراكمي
+  if(lastStmt){
+    base = Number(lastStmt.closingBalance)||0;
+    fromDate = lastStmt.toDate; // نبدأ من بعد نهاية المستخلص
+  }
+
+  // حوافظ قبل الفترة (وبعد المستخلص إن وجد)
+  DB.getAll('sarkis').forEach(sk=>{
+    if(sk.status==='ملغي') return;
+    if(fromDate && sk.date<=fromDate) return;
+    if(sk.date>=beforeDate) return;
+    if(isCust && sk.client===partyName)   base += Number(sk.totalSell)||0;
+    if(!isCust && sk.supplier===partyName) base += Number(sk.totalBuy)||0;
+  });
+
+  // قيود قبل الفترة
+  DB.getAll('journal').forEach(j=>{
+    if(fromDate && j.date<=fromDate) return;
+    if(j.date>=beforeDate) return;
+    if(isCust){
+      if(j.entryType==='تحصيل'&&j.party===partyName) base -= Number(j.amount)||0;
+      if(j.entryType==='يدوي'&&j.party===partyName&&j.partyType==='عميل'&&j.creditCode==='1010') base -= Number(j.creditAmount)||0;
+    } else {
+      if(j.entryType==='دفع'&&j.party===partyName) base -= Number(j.amount)||0;
+      if(j.entryType==='يدوي'&&j.party===partyName&&j.partyType==='مورد'&&j.debitCode==='2001') base -= Number(j.debitAmount)||0;
+    }
+  });
+
+  const label = lastStmt
+    ? `رصيد مرحَّل من مستخلص #${lastStmt.id} + حركات حتى ${fmtDate(beforeDate)}`
+    : `رصيد أول المدة (حتى ${fmtDate(beforeDate)})`;
+
+  return {opening: base, label, lastStmt};
+}
+
+// ═══════════════════════════════════════════════════════
+// CUSTOMER STATEMENT
+// ═══════════════════════════════════════════════════════
+let _CS={party:'',from:'2026-01-01',to:todayStr(),mat:'الكل'};
+
 function renderCustStmt(){
   const customers=DB.getAll('customers');
   const materials=DB.getAll('materials');
   if(!_CS.party&&customers[0])_CS.party=customers[0].name;
-  const lastStmt=getLastStatement(_CS.party,'customer');
-  const cust=customers.find(c=>c.name===_CS.party);
-  const opening=lastStmt?Number(lastStmt.closingBalance)||0:Number(cust?.openingBalance)||0;
-  const openLabel=lastStmt?`رصيد مستخلص رقم ${lastStmt.id}`:'الرصيد الافتتاحي';
-  const fd=new Date(_CS.from),td=new Date(_CS.to);
+
+  // رصيد أول المدة الذكي
+  const {opening, label: openLabel, lastStmt} = _calcOpeningBefore('customer', _CS.party, _CS.from);
+
+  const fd=new Date(_CS.from), td=new Date(_CS.to);
 
   const sarkis=DB.getAll('sarkis').filter(sk=>{
     const d=new Date(sk.date);
     return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);
-  }).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
 
   const colls=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
@@ -32,7 +92,6 @@ function renderCustStmt(){
   const balance=opening+totalSell-totalColl;
   const matNames=['الكل',...materials.map(m=>m.name)];
 
-  // Per-material summary
   const matSummary={};
   sarkis.forEach(sk=>{
     if(!matSummary[sk.material])matSummary[sk.material]={cubic:0,sell:0,trips:0,count:0};
@@ -51,10 +110,14 @@ function renderCustStmt(){
         <div class="form-group"><label>الخامة</label><select onchange="_CS.mat=this.value;nav('cust-stmt')">${matNames.map(m=>`<option ${_CS.mat===m?'selected':''}>${m}</option>`).join('')}</select></div>
       </div>
       ${lastStmt?`<div class="alert alert-blue mt8">📋 مستخلص سابق معتمد: <strong>رقم ${lastStmt.id}</strong> — رصيد مرحَّل: <strong>${curr(lastStmt.closingBalance)}</strong> — بتاريخ ${fmtDate(lastStmt.approvedAt)}</div>`:''}
+      ${opening!==0&&!lastStmt?`<div class="alert alert-blue mt8">📊 تم احتساب رصيد أول المدة تراكمياً من كل الحركات السابقة لـ ${fmtDate(_CS.from)}</div>`:''}
     </div>
 
     <div class="grid4 mb12">
-      <div class="card-sm text-center"><div class="text-xs text-gray mb4">${openLabel}</div><div class="font-bold text-brand tabular">${curr(opening)}</div></div>
+      <div class="card-sm text-center">
+        <div class="text-xs text-gray mb4">${openLabel}</div>
+        <div class="font-bold text-brand tabular" style="font-size:13px">${curr(opening)}</div>
+      </div>
       <div class="card-sm text-center"><div class="text-xs text-gray mb4">إجمالي المبيعات</div><div class="font-bold text-brand tabular">${curr(totalSell)}</div></div>
       <div class="card-sm text-center"><div class="text-xs text-gray mb4">إجمالي التحصيلات</div><div class="font-bold text-green tabular">${curr(totalColl)}</div></div>
       <div class="card-sm text-center" style="border-color:${balance>0?'#fca5a5':'#86efac'}">
@@ -68,7 +131,6 @@ function renderCustStmt(){
       <button class="btn btn-green" onclick="approveStmt('customer',_CS.party,_CS.from,_CS.to,${opening},${totalSell},0,${totalColl},0,${balance})">✅ اعتماد وترحيل الرصيد</button>
     </div>
 
-    <!-- ملخص الخامات -->
     ${Object.keys(matSummary).length>0?`
     <div class="card mb12">
       <div class="section-title">🪨 ملخص الخامات</div>
@@ -93,7 +155,6 @@ function renderCustStmt(){
       </table></div>
     </div>`:''}
 
-    <!-- تفاصيل الحوافظ كاملة -->
     <div class="card mb12">
       <div class="flex-between mb8">
         <div class="section-title" style="margin-bottom:0">🚛 تفاصيل الحوافظ — كل النقلات (${sarkis.length} حافظة)</div>
@@ -148,7 +209,6 @@ function renderCustStmt(){
         </div>`).join('')||`<div class="tbl-empty">لا توجد حوافظ في هذه الفترة</div>`}
     </div>
 
-    <!-- التحصيلات -->
     <div class="card">
       <div class="flex-between mb8">
         <div class="section-title" style="margin-bottom:0">💵 التحصيلات من دفتر اليومية (${colls.length})</div>
@@ -166,7 +226,7 @@ function renderCustStmt(){
             <td class="text-gray">${c.bank||'—'}</td>
             <td class="text-gray">${c.description||(c.entryType==='يدوي'?'قيد يدوي → '+(c.debitCode||'')+' '+(c.debitName||''):'—')}</td>
           </tr>`).join('')||`<tr><td colspan="7" class="tbl-empty">لا توجد تحصيلات</td></tr>`}
-          ${colls.length>0?`<tfoot><tr><td colspan="1" style="font-weight:700">الإجمالي</td><td class="tabular text-green font-bold">${curr(totalColl)}</td><td colspan="5"></td></tr></tfoot>`:''}
+          ${colls.length>0?`<tfoot><tr><td style="font-weight:700">الإجمالي</td><td colspan="1" class="tabular text-green font-bold">${curr(totalColl)}</td><td colspan="5"></td></tr></tfoot>`:''}
         </tbody>
       </table></div>
     </div>
@@ -174,7 +234,7 @@ function renderCustStmt(){
 }
 
 // ═══════════════════════════════════════════════════════
-// COMPREHENSIVE SUPPLIER STATEMENT
+// SUPPLIER STATEMENT
 // ═══════════════════════════════════════════════════════
 let _SS={party:'',from:'2026-01-01',to:todayStr(),mat:'الكل'};
 
@@ -182,16 +242,15 @@ function renderSuppStmt(){
   const suppliers=DB.getAll('suppliers');
   const materials=DB.getAll('materials');
   if(!_SS.party&&suppliers[0])_SS.party=suppliers[0].name;
-  const lastStmt=getLastStatement(_SS.party,'supplier');
-  const supp=suppliers.find(s=>s.name===_SS.party);
-  const opening=lastStmt?Number(lastStmt.closingBalance)||0:Number(supp?.openingBalance)||0;
-  const openLabel=lastStmt?`رصيد مستخلص رقم ${lastStmt.id}`:'الرصيد الافتتاحي';
-  const fd=new Date(_SS.from),td=new Date(_SS.to);
+
+  const {opening, label: openLabel, lastStmt} = _calcOpeningBefore('supplier', _SS.party, _SS.from);
+
+  const fd=new Date(_SS.from), td=new Date(_SS.to);
 
   const sarkis=DB.getAll('sarkis').filter(sk=>{
     const d=new Date(sk.date);
     return sk.supplier===_SS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_SS.mat==='الكل'||sk.material===_SS.mat);
-  }).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
 
   const pmts=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
@@ -227,11 +286,15 @@ function renderSuppStmt(){
         <div class="form-group"><label>إلى</label><input type="date" value="${_SS.to}" onchange="_SS.to=this.value;nav('supp-stmt')"></div>
         <div class="form-group"><label>الخامة</label><select onchange="_SS.mat=this.value;nav('supp-stmt')">${matNames.map(m=>`<option ${_SS.mat===m?'selected':''}>${m}</option>`).join('')}</select></div>
       </div>
-      ${lastStmt?`<div class="alert alert-blue mt8">📋 مستخلص سابق: <strong>رقم ${lastStmt.id}</strong> — رصيد مرحَّل: <strong>${curr(lastStmt.closingBalance)}</strong></div>`:''}
+      ${lastStmt?`<div class="alert alert-blue mt8">📋 مستخلص سابق معتمد: <strong>رقم ${lastStmt.id}</strong> — رصيد مرحَّل: <strong>${curr(lastStmt.closingBalance)}</strong> — بتاريخ ${fmtDate(lastStmt.approvedAt)}</div>`:''}
+      ${opening!==0&&!lastStmt?`<div class="alert alert-blue mt8">📊 تم احتساب رصيد أول المدة تراكمياً من كل الحركات السابقة لـ ${fmtDate(_SS.from)}</div>`:''}
     </div>
 
     <div class="grid4 mb12">
-      <div class="card-sm text-center"><div class="text-xs text-gray mb4">${openLabel}</div><div class="font-bold text-brand tabular">${curr(opening)}</div></div>
+      <div class="card-sm text-center">
+        <div class="text-xs text-gray mb4">${openLabel}</div>
+        <div class="font-bold text-brand tabular" style="font-size:13px">${curr(opening)}</div>
+      </div>
       <div class="card-sm text-center"><div class="text-xs text-gray mb4">إجمالي المشتريات</div><div class="font-bold text-orange tabular">${curr(totalBuy)}</div></div>
       <div class="card-sm text-center"><div class="text-xs text-gray mb4">إجمالي المدفوعات</div><div class="font-bold text-green tabular">${curr(totalPmt)}</div></div>
       <div class="card-sm text-center" style="border-color:${balance>0?'#fca5a5':'#86efac'}">
