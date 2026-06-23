@@ -7,7 +7,6 @@ function renderAccounts(){
   const creditTypes=['خصوم','حقوق ملكية','إيرادات'];
   const typeColor={أصول:'blue',خصوم:'red','حقوق ملكية':'purple',إيرادات:'green',مصروفات:'yellow'};
 
-  // Compute running balance for each account
   const acctBalance=(code,type,opening)=>{
     let bal=Number(opening)||0;
     const isDebit=debitTypes.includes(type);
@@ -60,73 +59,41 @@ function renderAccounts(){
   </div>`;
 }
 
-function viewAcctStatement(id){
-  const acct=DB.getById('accounts',id);if(!acct)return;
-  const jrn=DB.getAll('journal').sort((a,b)=>new Date(a.date)-new Date(b.date));
+// ── Helper: build rows for an account with optional date filter ──────────────
+function _buildAcctRows(acct, dateFrom, dateTo, sideFilter, searchTxt){
   const debitTypes=['أصول','مصروفات'];
   const isDebit=debitTypes.includes(acct.type);
-  let running=Number(acct.openingBalance)||0;
-
-  const rows=[];
-  jrn.forEach(j=>{
-    let affect=0,side='';
-    if(j.entryType==='يدوي'){
-      if(j.debitCode===acct.code){affect=Number(j.debitAmount)||0;side='مدين';}
-      else if(j.creditCode===acct.code){affect=Number(j.creditAmount)||0;side='دائن';}
-    } else {
-      const amt=Number(j.amount)||0;
-      if(j.debitCode===acct.code){affect=amt;side='مدين';}
-      else if(j.creditCode===acct.code){affect=amt;side='دائن';}
-    }
-    if(!affect)return;
-    const change=isDebit?(side==='مدين'?affect:-affect):(side==='دائن'?affect:-affect);
-    running+=change;
-    rows.push({...j,affect,side,running,change});
+  const allJrn=DB.getAll('journal').sort((a,b)=>{
+    const dd=a.date.localeCompare(b.date);
+    return dd!==0?dd:a.id-b.id;
   });
 
-  openModal(`كشف حساب: ${acct.code} — ${acct.name}`,`
-    <div class="grid4 mb12" style="gap:8px">
-      <div class="card-sm text-center"><div class="text-xs text-gray mb4">الرصيد الافتتاحي</div><div class="font-bold text-brand tabular">${curr(acct.openingBalance)}</div></div>
-      <div class="card-sm text-center"><div class="text-xs text-gray mb4">حركات مدينة</div><div class="font-bold text-blue-600 tabular">${curr(rows.filter(r=>r.side==='مدين').reduce((s,r)=>s+r.affect,0))}</div></div>
-      <div class="card-sm text-center"><div class="text-xs text-gray mb4">حركات دائنة</div><div class="font-bold text-orange tabular">${curr(rows.filter(r=>r.side==='دائن').reduce((s,r)=>s+r.affect,0))}</div></div>
-      <div class="card-sm text-center"><div class="text-xs text-gray mb4">الرصيد الحالي</div><div class="font-bold text-brand tabular">${curr(running)}</div></div>
-    </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>التاريخ</th><th>نوع القيد</th><th>الجهة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
-      <tbody>
-        <tr style="background:#f0f9ff;font-weight:600">
-          <td colspan="6">رصيد أول المدة</td>
-          <td class="tabular font-bold text-brand">${curr(acct.openingBalance)}</td>
-        </tr>
-        ${rows.map(r=>`<tr style="${r.side==='مدين'?'background:#eff6ff':'background:#f0fdf4'}">
-          <td>${fmtDate(r.date)}</td>
-          <td>${statusBadge(r.entryType)}</td>
-          <td><strong>${r.party||'—'}</strong></td>
-          <td class="text-gray">${r.description||'—'}</td>
-          <td class="tabular text-blue-700">${r.side==='مدين'?curr(r.affect):'—'}</td>
-          <td class="tabular text-orange">${r.side==='دائن'?curr(r.affect):'—'}</td>
-          <td class="tabular font-bold ${r.running>=0?'text-brand':'text-red'}">${curr(r.running)}</td>
-        </tr>`).join('')||`<tr><td colspan="7" class="tbl-empty">لا توجد حركات</td></tr>`}
-        <tr style="background:#fefce8;font-weight:700">
-          <td colspan="6">رصيد آخر المدة</td>
-          <td class="tabular text-brand">${curr(running)}</td>
-        </tr>
-      </tbody>
-    </table></div>`,
-    `<button class="btn btn-gray" onclick="closeModal()">إغلاق</button>
-     <button class="btn btn-gray" onclick="exportAcctStatementExcel(${id})">📊 Excel</button>
-     <button class="btn btn-primary" onclick="printAcctStatement(${id})">🖨️ طباعة</button>`,
-    'modal-xl');
-}
+  // حساب رصيد أول المدة = opening + كل الحركات قبل dateFrom
+  let openingBal=Number(acct.openingBalance)||0;
+  if(dateFrom){
+    allJrn.forEach(j=>{
+      if(j.date>=dateFrom) return; // فقط ما قبل الفترة
+      let affect=0,side='';
+      if(j.entryType==='يدوي'){
+        if(j.debitCode===acct.code){affect=Number(j.debitAmount)||0;side='مدين';}
+        else if(j.creditCode===acct.code){affect=Number(j.creditAmount)||0;side='دائن';}
+      } else {
+        const amt=Number(j.amount)||0;
+        if(j.debitCode===acct.code){affect=amt;side='مدين';}
+        else if(j.creditCode===acct.code){affect=amt;side='دائن';}
+      }
+      if(!affect) return;
+      const change=isDebit?(side==='مدين'?affect:-affect):(side==='دائن'?affect:-affect);
+      openingBal+=change;
+    });
+  }
 
-function printAcctStatement(id){
-  const acct=DB.getById('accounts',id);if(!acct)return;
-  const jrn=DB.getAll('journal').sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const debitTypes=['أصول','مصروفات'];
-  const isDebit=debitTypes.includes(acct.type);
-  let running=Number(acct.openingBalance)||0;
+  // سطور الفترة المحددة
+  let running=openingBal;
   const rows=[];
-  jrn.forEach(j=>{
+  allJrn.forEach(j=>{
+    if(dateFrom && j.date<dateFrom) return;
+    if(dateTo   && j.date>dateTo)   return;
     let affect=0,side='';
     if(j.entryType==='يدوي'){
       if(j.debitCode===acct.code){affect=Number(j.debitAmount)||0;side='مدين';}
@@ -136,22 +103,137 @@ function printAcctStatement(id){
       if(j.debitCode===acct.code){affect=amt;side='مدين';}
       else if(j.creditCode===acct.code){affect=amt;side='دائن';}
     }
-    if(!affect)return;
+    if(!affect) return;
     const change=isDebit?(side==='مدين'?affect:-affect):(side==='دائن'?affect:-affect);
     running+=change;
     rows.push({...j,affect,side,running});
   });
+
+  // فلتر النوع والبحث
+  const filtered=rows.filter(r=>{
+    if(sideFilter==='مدين' && r.side!=='مدين') return false;
+    if(sideFilter==='دائن' && r.side!=='دائن') return false;
+    if(searchTxt){
+      const q=searchTxt.toLowerCase();
+      if(!(r.party||'').toLowerCase().includes(q) && !(r.description||'').toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  return {rows:filtered, openingBal, closingBal:running};
+}
+
+// ── كشف الحساب ──────────────────────────────────────────────────────────────
+function viewAcctStatement(id){
+  const acct=DB.getById('accounts',id);if(!acct)return;
+  window._ACCT_STMT_ID=id;
+  window._ACCT_STMT_FROM='';
+  window._ACCT_STMT_TO='';
+  window._ACCT_STMT_SIDE='الكل';
+  window._ACCT_STMT_SEARCH='';
+  _renderAcctStmtModal(id);
+}
+
+function _renderAcctStmtModal(id){
+  const acct=DB.getById('accounts',id);if(!acct)return;
+  const df=window._ACCT_STMT_FROM||'';
+  const dt=window._ACCT_STMT_TO||'';
+  const side=window._ACCT_STMT_SIDE||'الكل';
+  const search=window._ACCT_STMT_SEARCH||'';
+
+  const {rows,openingBal,closingBal}=_buildAcctRows(acct,df||null,dt||null,side==='الكل'?'':side,search);
+
+  const totDebit =rows.filter(r=>r.side==='مدين').reduce((s,r)=>s+r.affect,0);
+  const totCredit=rows.filter(r=>r.side==='دائن').reduce((s,r)=>s+r.affect,0);
+
+  const body=`
+    <!-- فلاتر -->
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px">
+      <div class="form-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="margin-bottom:0;min-width:140px">
+          <label style="font-size:11px;font-weight:600;color:#475569">من تاريخ</label>
+          <input type="date" id="as-from" value="${df}" onchange="window._ACCT_STMT_FROM=this.value;_renderAcctStmtModal(${id})" style="font-size:12px">
+        </div>
+        <div class="form-group" style="margin-bottom:0;min-width:140px">
+          <label style="font-size:11px;font-weight:600;color:#475569">إلى تاريخ</label>
+          <input type="date" id="as-to" value="${dt}" onchange="window._ACCT_STMT_TO=this.value;_renderAcctStmtModal(${id})" style="font-size:12px">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label style="font-size:11px;font-weight:600;color:#475569">نوع الحركة</label>
+          <select id="as-side" onchange="window._ACCT_STMT_SIDE=this.value;_renderAcctStmtModal(${id})" style="font-size:12px">
+            ${['الكل','مدين','دائن'].map(s=>`<option ${side===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:160px">
+          <label style="font-size:11px;font-weight:600;color:#475569">بحث (جهة / بيان)</label>
+          <input type="text" id="as-search" value="${search}" placeholder="ابحث..." oninput="window._ACCT_STMT_SEARCH=this.value;_renderAcctStmtModal(${id})" style="font-size:12px">
+        </div>
+        <button class="btn btn-gray btn-sm" onclick="window._ACCT_STMT_FROM='';window._ACCT_STMT_TO='';window._ACCT_STMT_SIDE='الكل';window._ACCT_STMT_SEARCH='';_renderAcctStmtModal(${id})" style="margin-bottom:0">🔄 إعادة ضبط</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid4 mb12" style="gap:8px">
+      <div class="card-sm text-center"><div class="text-xs text-gray mb4">رصيد أول المدة</div><div class="font-bold text-brand tabular">${curr(openingBal)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray mb4">حركات مدينة</div><div class="font-bold tabular" style="color:#1d4ed8">${curr(totDebit)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray mb4">حركات دائنة</div><div class="font-bold tabular" style="color:#d97706">${curr(totCredit)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray mb4">رصيد آخر المدة</div><div class="font-bold tabular ${closingBal>=0?'text-brand':'text-red'}">${curr(closingBal)}</div></div>
+    </div>
+
+    <!-- جدول -->
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>التاريخ</th><th>نوع القيد</th><th>الجهة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead>
+      <tbody>
+        <tr style="background:#f0f9ff;font-weight:600">
+          <td colspan="7">رصيد أول المدة ${df?'('+fmtDate(df)+')':''}</td>
+          <td class="tabular font-bold text-brand">${curr(openingBal)}</td>
+        </tr>
+        ${rows.map((r,i)=>`<tr style="${r.side==='مدين'?'background:#eff6ff':'background:#f0fdf4'}">
+          <td class="text-gray text-xs">${i+1}</td>
+          <td>${fmtDate(r.date)}</td>
+          <td>${statusBadge(r.entryType)}</td>
+          <td><strong>${r.party||'—'}</strong></td>
+          <td class="text-gray">${r.description||'—'}</td>
+          <td class="tabular" style="color:#1d4ed8">${r.side==='مدين'?curr(r.affect):'—'}</td>
+          <td class="tabular" style="color:#d97706">${r.side==='دائن'?curr(r.affect):'—'}</td>
+          <td class="tabular font-bold ${r.running>=0?'text-brand':'text-red'}">${curr(r.running)}</td>
+        </tr>`).join('')||`<tr><td colspan="8" class="tbl-empty">لا توجد حركات في هذه الفترة</td></tr>`}
+        <tr style="background:#fefce8;font-weight:700">
+          <td colspan="7">رصيد آخر المدة ${dt?'('+fmtDate(dt)+')':''}</td>
+          <td class="tabular text-brand">${curr(closingBal)}</td>
+        </tr>
+      </tbody>
+    </table></div>`;
+
+  const foot=`
+    <button class="btn btn-gray" onclick="closeModal()">إغلاق</button>
+    <button class="btn btn-gray" onclick="exportAcctStatementExcel(${id})">📊 Excel</button>
+    <button class="btn btn-primary" onclick="printAcctStatement(${id})">🖨️ طباعة</button>`;
+
+  openModal(`كشف حساب: ${acct.code} — ${acct.name}`,body,foot,'modal-xl');
+}
+
+function printAcctStatement(id){
+  const acct=DB.getById('accounts',id);if(!acct)return;
+  const df=window._ACCT_STMT_FROM||null;
+  const dt=window._ACCT_STMT_TO||null;
+  const side=window._ACCT_STMT_SIDE||'الكل';
+  const search=window._ACCT_STMT_SEARCH||'';
+  const {rows,openingBal,closingBal}=_buildAcctRows(acct,df,dt,side==='الكل'?'':side,search);
+
   const _n2=(n)=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(Number(n)||0)+' ج.م';
   const _d2=(ts)=>{if(!ts)return '—';const d=new Date(ts);return isNaN(d)?'—':d.toLocaleDateString('ar-EG',{day:'2-digit',month:'2-digit',year:'numeric'});};
   const w=window.open('','_blank');
   const sc='<scr'+'ipt>setTimeout(()=>window.print(),600)<'+'/scr'+'ipt>';
-  const PCSS2=`*{font-family:Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box;direction:rtl}body{padding:12px;font-size:11px}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:10px}.co{font-size:16px;font-weight:700;color:#1F4E78}table{width:100%;border-collapse:collapse;font-size:10px}thead tr{background:#1F4E78;color:#fff}thead th{padding:6px 5px;text-align:right}tbody tr:nth-child(even){background:#f5f8fc}tbody td{padding:4px 5px;border-bottom:1px solid #eee}tfoot tr{background:#FFE699;font-weight:700}tfoot td{padding:5px}@media print{@page{margin:9mm}body{padding:0}}`;
+  const PCSS2=`*{font-family:Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box;direction:rtl}body{padding:12px;font-size:11px}.hdr{display:flex;justify-content:space-between;border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:10px}.co{font-size:16px;font-weight:700;color:#1F4E78}table{width:100%;border-collapse:collapse;font-size:10px}thead tr{background:#1F4E78;color:#fff}thead th{padding:6px 5px;text-align:right}tbody tr:nth-child(even){background:#f5f8fc}tbody td{padding:4px 5px;border-bottom:1px solid #eee}tfoot tr{background:#FFE699;font-weight:700}tfoot td{padding:5px}.filters{font-size:10px;color:#555;margin-bottom:6px}@media print{@page{margin:9mm}body{padding:0}}`;
+  const filterInfo=(df||dt||side!=='الكل')?`<div class="filters">الفترة: ${df?_d2(df):'البداية'} — ${dt?_d2(dt):'النهاية'} | النوع: ${side}</div>`:'';
   w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>كشف حساب<\/title><style>'+PCSS2+'<\/style><\/head><body>'+
     '<div class="hdr"><div><div class="co">شركة الهنا للنقل</div><div style="font-size:10px;color:#666">كشف حساب: '+acct.code+' — '+acct.name+'</div><div style="font-size:10px;color:#666">'+_d2(Date.now())+'</div></div><div style="text-align:left;font-size:10px;color:#666">نوع الحساب: '+acct.type+'</div></div>'+
-    '<table><thead><tr><th>التاريخ</th><th>نوع القيد</th><th>الجهة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>'+
-    '<tr style="background:#eff6ff;font-weight:600"><td colspan="6">رصيد أول المدة</td><td>'+_n2(acct.openingBalance)+'</td></tr>'+
-    rows.map(r=>'<tr><td>'+_d2(r.date)+'</td><td>'+r.entryType+'</td><td>'+(r.party||'—')+'</td><td>'+(r.description||'—')+'</td><td>'+(r.side==='مدين'?_n2(r.affect):'—')+'</td><td>'+(r.side==='دائن'?_n2(r.affect):'—')+'</td><td style="font-weight:700">'+_n2(r.running)+'</td></tr>').join('')+
-    '</tbody><tfoot><tr><td colspan="6">رصيد آخر المدة</td><td>'+_n2(running)+'</td></tr></tfoot></table>'+
+    filterInfo+
+    '<table><thead><tr><th>#</th><th>التاريخ</th><th>نوع القيد</th><th>الجهة</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>'+
+    '<tr style="background:#eff6ff;font-weight:600"><td colspan="7">رصيد أول المدة</td><td>'+_n2(openingBal)+'</td></tr>'+
+    rows.map((r,i)=>'<tr><td>'+(i+1)+'</td><td>'+_d2(r.date)+'</td><td>'+r.entryType+'</td><td>'+(r.party||'—')+'</td><td>'+(r.description||'—')+'</td><td>'+(r.side==='مدين'?_n2(r.affect):'—')+'</td><td>'+(r.side==='دائن'?_n2(r.affect):'—')+'</td><td style="font-weight:700">'+_n2(r.running)+'</td></tr>').join('')+
+    '</tbody><tfoot><tr><td colspan="7">رصيد آخر المدة</td><td>'+_n2(closingBal)+'</td></tr></tfoot></table>'+
     sc+'<\/body><\/html>');
   w.document.close();
 }
@@ -185,66 +267,41 @@ function delAcct(id,name){confirmDelete(`حذف حساب "${name}"؟`,()=>{DB.re
 // ═══════════════════════════════════════════════════════
 function renderCustomers(){ return renderPartyPage('customers','العملاء','👥','عميل'); }
 function renderSuppliers(){ return renderPartyPage('suppliers','الموردون','🏗️','مورد'); }
+
 // ── Excel Export: Account Statement ──────────────────────────────
 function exportAcctStatementExcel(id){
   if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
   const acct=DB.getById('accounts',id);
   if(!acct) return;
   const co=DB.getCompany();
-
-  const jrn=DB.getAll('journal').sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const debitTypes=['أصول','مصروفات'];
-  const isDebit=debitTypes.includes(acct.type);
-  let running=Number(acct.openingBalance)||0;
-  const rows=[];
-  jrn.forEach(j=>{
-    let affect=0,side='';
-    if(j.entryType==='يدوي'){
-      if(j.debitCode===acct.code){affect=Number(j.debitAmount)||0;side='مدين';}
-      else if(j.creditCode===acct.code){affect=Number(j.creditAmount)||0;side='دائن';}
-    } else {
-      const amt=Number(j.amount)||0;
-      if(j.debitCode===acct.code){affect=amt;side='مدين';}
-      else if(j.creditCode===acct.code){affect=amt;side='دائن';}
-    }
-    if(!affect)return;
-    const change=isDebit?(side==='مدين'?affect:-affect):(side==='دائن'?affect:-affect);
-    running+=change;
-    rows.push({...j,affect,side,running});
-  });
+  const df=window._ACCT_STMT_FROM||null;
+  const dt=window._ACCT_STMT_TO||null;
+  const side=window._ACCT_STMT_SIDE||'الكل';
+  const search=window._ACCT_STMT_SEARCH||'';
+  const {rows,openingBal,closingBal}=_buildAcctRows(acct,df,dt,side==='الكل'?'':side,search);
 
   const totDebit =rows.filter(r=>r.side==='مدين').reduce((s,r)=>s+r.affect,0);
   const totCredit=rows.filter(r=>r.side==='دائن').reduce((s,r)=>s+r.affect,0);
 
-  // Build sheet data
   const today=new Date().toLocaleDateString('ar-EG');
+  const filterStr=(df||dt)?`من ${df||'البداية'} إلى ${dt||'النهاية'}`:'كامل الفترة';
+
   const data=[
-    // Company header
-    [co.name||'شركة الهنا للنقل','','','','','',''],
-    ['كشف حساب: '+acct.code+' — '+acct.name,'','','','','',''],
-    ['تاريخ التصدير: '+today,'','','','','',''],
+    [co.name||'شركة الهنا للنقل','','','','','','',''],
+    ['كشف حساب: '+acct.code+' — '+acct.name,'','','','','','',''],
+    ['تاريخ التصدير: '+today+'  |  الفترة: '+filterStr,'','','','','','',''],
     [],
-    // KPIs
-    ['الرصيد الافتتاحي','حركات مدينة','حركات دائنة','صافي الحركة','الرصيد الحالي','',''],
-    [
-      Number(acct.openingBalance)||0,
-      totDebit,
-      totCredit,
-      totDebit-totCredit,
-      running,
-      '','',
-    ],
+    ['الرصيد الافتتاحي','حركات مدينة','حركات دائنة','صافي الحركة','رصيد آخر المدة','','',''],
+    [openingBal,totDebit,totCredit,totDebit-totCredit,closingBal,'','',''],
     [],
-    // Table header
-    ['التاريخ','نوع القيد','الجهة','البيان','الجهة المقابلة','مدين','دائن','الرصيد'],
-    // Opening row
-    ['','رصيد أول المدة','','','','','',Number(acct.openingBalance)||0],
+    ['#','التاريخ','نوع القيد','الجهة','البيان','الجهة المقابلة','مدين','دائن','الرصيد'],
+    ['','رصيد أول المدة','','','','','','',openingBal],
   ];
 
-  // Data rows
-  rows.forEach(r=>{
+  rows.forEach((r,i)=>{
     const counterAcct=r.side==='مدين'?(r.creditCode+' '+r.creditName):(r.debitCode+' '+r.debitName);
     data.push([
+      i+1,
       r.date?r.date.split('-').reverse().join('/'):'-',
       r.entryType,
       r.party||'-',
@@ -256,27 +313,18 @@ function exportAcctStatementExcel(id){
     ]);
   });
 
-  // Closing row
-  data.push(['','رصيد آخر المدة','','','','','' ,running]);
+  data.push(['','رصيد آخر المدة','','','','','','',closingBal]);
   data.push([]);
-  // Summary
-  data.push(['ملخص','','','','','','','']);
-  data.push(['إجمالي المدين','',totDebit,'','إجمالي الدائن','',totCredit,'']);
-  data.push(['صافي','',totDebit-totCredit,'','الرصيد النهائي','',running,'']);
+  data.push(['إجمالي المدين','',totDebit,'','إجمالي الدائن','',totCredit,'','']);
+  data.push(['صافي','',totDebit-totCredit,'','الرصيد النهائي','',closingBal,'','']);
 
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet(data);
-
-  // Column widths
-  ws['!cols']=[
-    {wch:14},{wch:14},{wch:18},{wch:28},{wch:22},{wch:14},{wch:14},{wch:16}
-  ];
-
-  // Merge company name header
+  ws['!cols']=[{wch:6},{wch:14},{wch:14},{wch:18},{wch:28},{wch:22},{wch:14},{wch:14},{wch:16}];
   ws['!merges']=[
-    {s:{r:0,c:0},e:{r:0,c:7}},
-    {s:{r:1,c:0},e:{r:1,c:7}},
-    {s:{r:2,c:0},e:{r:2,c:7}},
+    {s:{r:0,c:0},e:{r:0,c:8}},
+    {s:{r:1,c:0},e:{r:1,c:8}},
+    {s:{r:2,c:0},e:{r:2,c:8}},
   ];
 
   XLSX.utils.book_append_sheet(wb,ws,'كشف الحساب');
