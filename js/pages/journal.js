@@ -1,6 +1,9 @@
 // ═══ JOURNAL ═══
 function renderJournal(){
-  const jrn=DB.getAll('journal').sort((a,b)=>b.createdAt-a.createdAt);
+  const jrn=DB.getAll('journal').sort((a,b)=>{
+  const dd=b.date.localeCompare(a.date);
+  return dd!==0?dd:b.id-a.id;
+});
   const filtered=jrn.filter(j=>_JRN_TAB==='all'||j.entryType===_JRN_TAB);
   const manualOk=jrn.filter(j=>j.entryType==='يدوي').every(j=>Math.abs((Number(j.debitAmount)||0)-(Number(j.creditAmount)||0))<0.01);
   const tabs=[['all','الكل'],['تحصيل','تحصيلات'],['دفع','مدفوعات'],['يدوي','قيود يدوية']];
