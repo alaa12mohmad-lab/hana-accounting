@@ -62,12 +62,27 @@ function statusBadge(s){
            'رصيد أول المدة':'gray'};
   return badge(s, m[s]||'gray');
 }
-function toast(msg,type='success'){
-  const t=document.createElement('div');
-  t.className='toast '+(type==='error'?'toast-error':type==='warn'?'toast-warn':'toast-ok');
-  t.textContent=msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(),3000);
+function toast(msg, type='success'){
+  // Get or create container
+  let container = document.getElementById('toast-container');
+  if(!container){
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+  const t = document.createElement('div');
+  t.className = 'toast '
+    + (type==='error' ? 'toast-error'
+    :  type==='warn'  ? 'toast-info'
+    :                   'toast-success');
+  t.textContent = msg;
+  container.appendChild(t);
+  // Trigger show animation
+  requestAnimationFrame(()=>{ t.classList.add('show'); });
+  setTimeout(()=>{
+    t.classList.remove('show');
+    setTimeout(()=>t.remove(), 300);
+  }, 3000);
 }
 
 // ── Print ─────────────────────────────────────────────────────────
