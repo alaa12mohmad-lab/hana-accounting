@@ -108,8 +108,3 @@ function saveChq(editId,type){
 }
 function updChq(id,s){DB.update('cheques',id,{status:s});toast(s==='تم الصرف'?'✅ تم الصرف':'مرتجع');nav('cheques');}
 function delChq(id){confirmDelete('حذف هذا الشيك؟',()=>{DB.remove('cheques',id);toast('تم الحذف');nav('cheques');});}
-
-// ═══════════════════════════════════════════════════════
-// COMPREHENSIVE CUSTOMER STATEMENT
-// ═══════════════════════════════════════════════════════
-let _CS={party:'',from:'2026-01-01',to:todayStr(),mat:'الكل'};
