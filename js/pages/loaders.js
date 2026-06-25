@@ -257,7 +257,7 @@ function renderLoaderReport(loaders){
     return true;
   });
 
-  // Collect invoice lines for this loader
+  // Collect invoice lines for this loader (cubic)
   const invLines = [];
   allSarkis.forEach(sk=>{
     (sk.lines||[]).forEach(ln=>{
@@ -277,6 +277,17 @@ function renderLoaderReport(loaders){
   const totalRevenue = invLines.reduce((s,l)=>s+l.revenue, 0);
   const totalM3      = invLines.reduce((s,l)=>s+l.netM3,   0);
   const totalTrips   = invLines.reduce((s,l)=>s+l.trips,    0);
+
+  // Hourly jobs revenue
+  const hourlyJobs = DB.getAll('loaderHours').filter(j=>{
+    if(j.loaderId!==ld.id) return false;
+    if(from && j.date<from) return false;
+    if(to   && j.date>to)   return false;
+    return true;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+  const totalHourlyRevenue = hourlyJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+  const totalHours         = hourlyJobs.reduce((s,j)=>s+(Number(j.hours)||0),0);
+  const grandRevenue       = totalRevenue + totalHourlyRevenue;
 
   // Expenses from journal linked to this loader
   const jExpenses = DB.getAll('journal').filter(j=>{
@@ -299,8 +310,8 @@ function renderLoaderReport(loaders){
     : new Date().getMonth()+1;
   const periodDep = monthlyDep * periodMonths;
 
-  const totalCosts = totalExp; // الإهلاك مفصول تماماً عن حساب الربح والمصاريف
-  const netProfit  = totalRevenue - totalCosts;
+  const totalCosts = totalExp;
+  const netProfit  = grandRevenue - totalCosts;
 
   // Partner profit shares
   const partners = ld.partners||[];
@@ -315,7 +326,7 @@ function renderLoaderReport(loaders){
             <div style="font-size:20px;font-weight:700">🚜 ${ld.name}</div>
             <div style="font-size:11px;opacity:.8;margin-top:4px">
               ${from||'منذ البداية'} — ${to||'إلى اليوم'} |
-              تكلفة الشراء: ${curr(ld.purchasePrice||0)}
+              تكلفة الشراء: ${curr(ld.purchasePrice||0)} | إيراد خامات: ${curr(totalRevenue)} | إيراد ساعات: ${curr(totalHourlyRevenue)}
             </div>
           </div>
           <div style="text-align:center;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 20px">
@@ -359,6 +370,59 @@ function renderLoaderReport(loaders){
           </tr></tfoot>
         </table></div>
       </div>
+
+      <!-- Hourly jobs section -->
+      ${hourlyJobs.length>0?`
+      <div class="card mb10">
+        <div class="flex-between mb8">
+          <div class="section-title" style="margin:0;color:#7c3aed">⏱️ إيراد الساعات</div>
+          <div style="font-size:14px;font-weight:700;color:#7c3aed">${curr(totalHourlyRevenue)}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+          <div style="background:#f5f3ff;border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:#64748b">⏱️ إجمالي الساعات</div>
+            <div style="font-size:13px;font-weight:700;color:#7c3aed">${totalHours.toFixed(1)} س</div>
+          </div>
+          <div style="background:#f5f3ff;border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:#64748b">💰 إجمالي الإيراد</div>
+            <div style="font-size:13px;font-weight:700;color:#7c3aed">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0))}</div>
+          </div>
+          <div style="background:#f5f3ff;border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:#64748b">🔻 خصومات العملاء</div>
+            <div style="font-size:13px;font-weight:700;color:#d97706">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0))}</div>
+          </div>
+        </div>
+        <div class="tbl-wrap"><table style="font-size:10px">
+          <thead><tr style="background:#7c3aed;color:#fff">
+            <th>التاريخ</th><th>العميل</th><th>البيان</th>
+            <th style="text-align:center">الساعات</th>
+            <th style="text-align:center">سعر/ساعة</th>
+            <th style="text-align:center">الإجمالي</th>
+            <th style="text-align:center">خصم</th>
+            <th style="text-align:center">صافي الإيراد</th>
+          </tr></thead>
+          <tbody>
+            ${hourlyJobs.map(j=>`<tr>
+              <td>${fmtDate(j.date)}</td>
+              <td><strong>${j.client||'—'}</strong></td>
+              <td class="text-xs">${j.description||'—'}</td>
+              <td style="text-align:center">${Number(j.hours)||0}</td>
+              <td style="text-align:center">${curr(j.pricePerHour||0)}</td>
+              <td style="text-align:center;color:#1d4ed8">${curr(j.grossAmount||0)}</td>
+              <td style="text-align:center;color:#d97706">${curr(j.discountClient||0)}</td>
+              <td style="text-align:center;font-weight:700;color:#7c3aed">${curr(j.netClient||0)}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot><tr style="background:#ede9fe;font-weight:700">
+            <td colspan="3">الإجمالي</td>
+            <td style="text-align:center">${totalHours.toFixed(1)}</td>
+            <td></td>
+            <td style="text-align:center">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0))}</td>
+            <td style="text-align:center">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0))}</td>
+            <td style="text-align:center;color:#7c3aed">${curr(totalHourlyRevenue)}</td>
+          </tr></tfoot>
+        </table></div>
+      </div>`:''}
 
       <!-- Expenses section -->
       <div class="card mb10">
@@ -714,11 +778,8 @@ function renderLoaderHourly(loaders){
 
   const totHours    = jobs.reduce((s,j)=>s+(Number(j.hours)||0),0);
   const totGross    = jobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0);
-  const totDiscC    = jobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0);
-  const totDiscL    = jobs.reduce((s,j)=>s+(Number(j.discountLoader)||0),0);
-  const totNetClient= jobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
-  const totNetLoader= jobs.reduce((s,j)=>s+(Number(j.netLoader)||0),0);
-  const totProfit   = totNetClient - totNetLoader;
+  const totDisc     = jobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0);
+  const totNet      = jobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
 
   return `<div>
     <div class="card mb12" style="padding:10px 14px">
@@ -745,13 +806,12 @@ function renderLoaderHourly(loaders){
     </div>
 
     <!-- KPIs -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
       ${[
         ['إجمالي الساعات','⏱️',totHours.toFixed(1)+' س','#1d4ed8'],
         ['إجمالي الإيراد','💰',curr(totGross),'#16a34a'],
-        ['خصم العميل','🔻',curr(totDiscC),'#d97706'],
-        ['خصم اللودر','🔻',curr(totDiscL),'#dc2626'],
-        ['صافي الربح','📈',curr(totProfit),totProfit>=0?'#16a34a':'#dc2626'],
+        ['خصم العميل','🔻',curr(totDisc),'#d97706'],
+        ['صافي الإيراد','📈',curr(totNet),totNet>=0?'#16a34a':'#dc2626'],
       ].map(([l,ic,v,col])=>`
         <div class="card-sm text-center">
           <div class="text-xs text-gray mb4">${ic} ${l}</div>
@@ -767,17 +827,14 @@ function renderLoaderHourly(loaders){
         <th style="text-align:center">سعر/ساعة</th>
         <th style="text-align:center">الإجمالي</th>
         <th style="text-align:center;background:#d97706;color:#fff">خصم عميل</th>
-        <th style="text-align:center">صافي عميل</th>
-        <th style="text-align:center;background:#dc2626;color:#fff">خصم لودر</th>
-        <th style="text-align:center">صافي لودر</th>
-        <th style="text-align:center;color:#16a34a">ربح</th>
+        <th style="text-align:center;color:#16a34a">صافي الإيراد</th>
         <th>إجراء</th>
       </tr></thead>
       <tbody>
         ${jobs.length===0
           ? `<tr><td colspan="13" class="tbl-empty"><span class="tbl-empty-icon">⏱️</span>لا توجد بيانات — أضف يومية ساعات</td></tr>`
           : jobs.map((j,i)=>{
-              const profit = (Number(j.netClient)||0) - (Number(j.netLoader)||0);
+
               return `<tr>
                 <td class="text-gray text-xs">${i+1}</td>
                 <td>${fmtDate(j.date)}</td>
@@ -788,9 +845,6 @@ function renderLoaderHourly(loaders){
                 <td style="text-align:center;font-weight:700;color:#1d4ed8">${curr(j.grossAmount||0)}</td>
                 <td style="text-align:center;color:#d97706">${curr(j.discountClient||0)}</td>
                 <td style="text-align:center;font-weight:700;color:#16a34a">${curr(j.netClient||0)}</td>
-                <td style="text-align:center;color:#dc2626">${curr(j.discountLoader||0)}</td>
-                <td style="text-align:center;font-weight:700">${curr(j.netLoader||0)}</td>
-                <td style="text-align:center;font-weight:700;color:${profit>=0?'#16a34a':'#dc2626'}">${curr(profit)}</td>
                 <td>
                   <button class="btn-icon" onclick="openLoaderHourlyModal(${j.id},${selId||'null'})" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px">✏️</button>
                   <button class="btn-icon" onclick="deleteLoaderHourly(${j.id})" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px">🗑️</button>
@@ -803,11 +857,8 @@ function renderLoaderHourly(loaders){
         <td style="text-align:center">${totHours.toFixed(1)}</td>
         <td></td>
         <td style="text-align:center;color:#1d4ed8">${curr(totGross)}</td>
-        <td style="text-align:center;color:#d97706">${curr(totDiscC)}</td>
-        <td style="text-align:center;color:#16a34a">${curr(totNetClient)}</td>
-        <td style="text-align:center;color:#dc2626">${curr(totDiscL)}</td>
-        <td style="text-align:center">${curr(totNetLoader)}</td>
-        <td style="text-align:center;color:${totProfit>=0?'#16a34a':'#dc2626'}">${curr(totProfit)}</td>
+        <td style="text-align:center;color:#d97706">${curr(totDisc)}</td>
+        <td style="text-align:center;color:#16a34a">${curr(totNet)}</td>
         <td></td>
       </tr></tfoot>`:''}
     </table></div>
@@ -839,12 +890,8 @@ function openLoaderHourlyModal(jobId, loaderId){
         var gross = hours * price;
         document.getElementById('lh-gross').textContent = curr(gross);
         var discC = Number(document.getElementById('lh-disc-client').value)||0;
-        var discL = Number(document.getElementById('lh-disc-loader').value)||0;
-        var netC  = Math.max(0, gross - discC);
-        var netL  = Math.max(0, gross - discL);
-        document.getElementById('lh-net-client').textContent = curr(netC);
-        document.getElementById('lh-net-loader').textContent = curr(netL);
-        document.getElementById('lh-profit').textContent    = curr(netC - netL);
+        var net   = Math.max(0, gross - discC);
+        document.getElementById('lh-net-client').textContent = curr(net);
       }
       window._lhRecalc = recalc;
       setTimeout(recalc, 100);
@@ -885,20 +932,12 @@ function openLoaderHourlyModal(jobId, loaderId){
       </div>
     </div>
     <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">
-      <div class="form-row fr2">
-        <div class="form-group" style="margin-bottom:0">
-          <label style="color:#d97706">خصم على العميل (ج.م)</label>
-          <input type="number" id="lh-disc-client" min="0" value="${v('discountClient',0)}" oninput="window._lhRecalc&&window._lhRecalc()">
-          <div style="font-size:10px;color:#64748b;margin-top:4px">صافي العميل: <strong id="lh-net-client">${curr(v('netClient',0))}</strong></div>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label style="color:#dc2626">خصم على اللودر (ج.م)</label>
-          <input type="number" id="lh-disc-loader" min="0" value="${v('discountLoader',0)}" oninput="window._lhRecalc&&window._lhRecalc()">
-          <div style="font-size:10px;color:#64748b;margin-top:4px">صافي اللودر: <strong id="lh-net-loader">${curr(v('netLoader',0))}</strong></div>
-        </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label style="color:#d97706">خصم على العميل (ج.م) — اختياري</label>
+        <input type="number" id="lh-disc-client" min="0" value="${v('discountClient',0)}" oninput="window._lhRecalc&&window._lhRecalc()">
       </div>
-      <div style="margin-top:8px;font-size:12px;font-weight:700">
-        صافي الربح: <span id="lh-profit" style="color:#16a34a">${curr((v('netClient',0))-(v('netLoader',0)))}</span>
+      <div style="font-size:13px;font-weight:700">
+        صافي الإيراد: <span id="lh-net-client" style="color:#16a34a">${curr(v('netClient',0))}</span>
       </div>
     </div>
     ${calcRow()}`;
@@ -919,20 +958,17 @@ function saveLoaderHourly(jobId){
 
   if(!loaderId||!date||!client||!hours) return toast('أكمل الحقول المطلوبة','error');
 
-  const gross       = hours * price;
-  const discClient  = Number(document.getElementById('lh-disc-client')?.value)||0;
-  const discLoader  = Number(document.getElementById('lh-disc-loader')?.value)||0;
-  const netClient   = Math.max(0, gross - discClient);
-  const netLoader   = Math.max(0, gross - discLoader);
+  const gross      = hours * price;
+  const discClient = Number(document.getElementById('lh-disc-client')?.value)||0;
+  const netClient  = Math.max(0, gross - discClient);
 
   const data = {
     loaderId, date, client,
     description: document.getElementById('lh-desc')?.value||'',
     hours, pricePerHour:price,
-    grossAmount: gross,
+    grossAmount:   gross,
     discountClient: discClient,
-    discountLoader: discLoader,
-    netClient, netLoader,
+    netClient,
   };
 
   if(jobId) DB.update('loaderHours', jobId, data);
@@ -972,8 +1008,6 @@ function printLoaderHourly(){
     <td>${i+1}</td><td>${_d2(j.date)}</td><td>${j.client||'—'}</td><td>${j.description||'—'}</td>
     <td>${Number(j.hours)||0}</td><td>${_n2(j.pricePerHour)}</td><td>${_n2(j.grossAmount)}</td>
     <td>${_n2(j.discountClient)}</td><td>${_n2(j.netClient)}</td>
-    <td>${_n2(j.discountLoader)}</td><td>${_n2(j.netLoader)}</td>
-    <td style="color:${(j.netClient-j.netLoader)>=0?'green':'red'}">${_n2(j.netClient-j.netLoader)}</td>
   </tr>`).join('');
 
   const w = window.open('','_blank');
@@ -986,7 +1020,7 @@ function printLoaderHourly(){
     <p style="color:#555;font-size:9px">الفترة: ${from||'البداية'} — ${to||'اليوم'}</p>
     <table><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>البيان</th>
       <th>الساعات</th><th>سعر/ساعة</th><th>الإجمالي</th>
-      <th>خصم عميل</th><th>صافي عميل</th><th>خصم لودر</th><th>صافي لودر</th><th>الربح</th>
+      <th>خصم عميل</th><th>صافي الإيراد</th>
     </tr></thead><tbody>${rows}</tbody></table>
     <script>setTimeout(()=>window.print(),500)<\/script></body></html>`);
   w.document.close();
@@ -1012,7 +1046,7 @@ function exportLoaderHourlyExcel(){
     [co.name||'شركة الهنا للنقل','','أعمال اللودر بالساعات: '+ld.name,'','','','','','','','',''],
     ['الفترة: '+(from||'البداية')+' — '+(to||'اليوم'),'','','','','','','','','','',''],
     [],
-    ['#','التاريخ','العميل','البيان','الساعات','سعر/ساعة','الإجمالي','خصم عميل','صافي عميل','خصم لودر','صافي لودر','الربح'],
+    ['#','التاريخ','العميل','البيان','الساعات','سعر/ساعة','الإجمالي','خصم عميل','صافي الإيراد'],
   ];
   const rows = jobs.map((j,i)=>[
     i+1,
@@ -1020,9 +1054,7 @@ function exportLoaderHourlyExcel(){
     j.client||'', j.description||'',
     Number(j.hours)||0, Number(j.pricePerHour)||0,
     Number(j.grossAmount)||0, Number(j.discountClient)||0,
-    Number(j.netClient)||0, Number(j.discountLoader)||0,
-    Number(j.netLoader)||0,
-    (Number(j.netClient)||0)-(Number(j.netLoader)||0),
+    Number(j.netClient)||0,
   ]);
 
   const totRow = ['','','','الإجمالي',
@@ -1030,9 +1062,6 @@ function exportLoaderHourlyExcel(){
     jobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0),
     jobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0),
     jobs.reduce((s,j)=>s+(Number(j.netClient)||0),0),
-    jobs.reduce((s,j)=>s+(Number(j.discountLoader)||0),0),
-    jobs.reduce((s,j)=>s+(Number(j.netLoader)||0),0),
-    jobs.reduce((s,j)=>s+((Number(j.netClient)||0)-(Number(j.netLoader)||0)),0),
   ];
 
   const wb = XLSX.utils.book_new();
