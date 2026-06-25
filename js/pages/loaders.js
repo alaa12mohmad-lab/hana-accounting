@@ -47,8 +47,7 @@ function renderLoaders(){
 
   const tabs = [
     ['list','🚜 اللوادر'],
-    ['hourly','⏱️ الساعات'],
-    ['report','📊 مركز الربح'],
+    ['report','📊 تقرير مركز الربح'],
   ];
 
   const tabBar = tabs.map(([k,l])=>`
@@ -62,8 +61,8 @@ function renderLoaders(){
 
   if(tab==='list'){
     content = renderLoaderList(loaders);
-  } else if(tab==='hourly'){
-    content = renderLoaderHourly(loaders);
+  } else if(tab==='statements'){
+    content = renderLoaderStatements(loaders);
   } else {
     content = renderLoaderReport(loaders);
   }
@@ -257,7 +256,7 @@ function renderLoaderReport(loaders){
     return true;
   });
 
-  // Collect invoice lines for this loader (cubic)
+  // Collect invoice lines for this loader
   const invLines = [];
   allSarkis.forEach(sk=>{
     (sk.lines||[]).forEach(ln=>{
@@ -277,17 +276,6 @@ function renderLoaderReport(loaders){
   const totalRevenue = invLines.reduce((s,l)=>s+l.revenue, 0);
   const totalM3      = invLines.reduce((s,l)=>s+l.netM3,   0);
   const totalTrips   = invLines.reduce((s,l)=>s+l.trips,    0);
-
-  // Hourly jobs revenue
-  const hourlyJobs = DB.getAll('loaderHours').filter(j=>{
-    if(j.loaderId!==ld.id) return false;
-    if(from && j.date<from) return false;
-    if(to   && j.date>to)   return false;
-    return true;
-  }).sort((a,b)=>a.date.localeCompare(b.date));
-  const totalHourlyRevenue = hourlyJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
-  const totalHours         = hourlyJobs.reduce((s,j)=>s+(Number(j.hours)||0),0);
-  const grandRevenue       = totalRevenue + totalHourlyRevenue;
 
   // Expenses from journal linked to this loader
   const jExpenses = DB.getAll('journal').filter(j=>{
@@ -310,8 +298,8 @@ function renderLoaderReport(loaders){
     : new Date().getMonth()+1;
   const periodDep = monthlyDep * periodMonths;
 
-  const totalCosts = totalExp;
-  const netProfit  = grandRevenue - totalCosts;
+  const totalCosts = totalExp; // الإهلاك مفصول تماماً عن حساب الربح والمصاريف
+  const netProfit  = totalRevenue - totalCosts;
 
   // Partner profit shares
   const partners = ld.partners||[];
@@ -326,7 +314,7 @@ function renderLoaderReport(loaders){
             <div style="font-size:20px;font-weight:700">🚜 ${ld.name}</div>
             <div style="font-size:11px;opacity:.8;margin-top:4px">
               ${from||'منذ البداية'} — ${to||'إلى اليوم'} |
-              تكلفة الشراء: ${curr(ld.purchasePrice||0)} | إيراد خامات: ${curr(totalRevenue)} | إيراد ساعات: ${curr(totalHourlyRevenue)}
+              تكلفة الشراء: ${curr(ld.purchasePrice||0)}
             </div>
           </div>
           <div style="text-align:center;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 20px">
@@ -370,59 +358,6 @@ function renderLoaderReport(loaders){
           </tr></tfoot>
         </table></div>
       </div>
-
-      <!-- Hourly jobs section -->
-      ${hourlyJobs.length>0?`
-      <div class="card mb10">
-        <div class="flex-between mb8">
-          <div class="section-title" style="margin:0;color:#7c3aed">⏱️ إيراد الساعات</div>
-          <div style="font-size:14px;font-weight:700;color:#7c3aed">${curr(totalHourlyRevenue)}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
-          <div style="background:#f5f3ff;border-radius:8px;padding:8px;text-align:center">
-            <div style="font-size:10px;color:#64748b">⏱️ إجمالي الساعات</div>
-            <div style="font-size:13px;font-weight:700;color:#7c3aed">${totalHours.toFixed(1)} س</div>
-          </div>
-          <div style="background:#f5f3ff;border-radius:8px;padding:8px;text-align:center">
-            <div style="font-size:10px;color:#64748b">💰 إجمالي الإيراد</div>
-            <div style="font-size:13px;font-weight:700;color:#7c3aed">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0))}</div>
-          </div>
-          <div style="background:#f5f3ff;border-radius:8px;padding:8px;text-align:center">
-            <div style="font-size:10px;color:#64748b">🔻 خصومات العملاء</div>
-            <div style="font-size:13px;font-weight:700;color:#d97706">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0))}</div>
-          </div>
-        </div>
-        <div class="tbl-wrap"><table style="font-size:10px">
-          <thead><tr style="background:#7c3aed;color:#fff">
-            <th>التاريخ</th><th>العميل</th><th>البيان</th>
-            <th style="text-align:center">الساعات</th>
-            <th style="text-align:center">سعر/ساعة</th>
-            <th style="text-align:center">الإجمالي</th>
-            <th style="text-align:center">خصم</th>
-            <th style="text-align:center">صافي الإيراد</th>
-          </tr></thead>
-          <tbody>
-            ${hourlyJobs.map(j=>`<tr>
-              <td>${fmtDate(j.date)}</td>
-              <td><strong>${j.client||'—'}</strong></td>
-              <td class="text-xs">${j.description||'—'}</td>
-              <td style="text-align:center">${Number(j.hours)||0}</td>
-              <td style="text-align:center">${curr(j.pricePerHour||0)}</td>
-              <td style="text-align:center;color:#1d4ed8">${curr(j.grossAmount||0)}</td>
-              <td style="text-align:center;color:#d97706">${curr(j.discountClient||0)}</td>
-              <td style="text-align:center;font-weight:700;color:#7c3aed">${curr(j.netClient||0)}</td>
-            </tr>`).join('')}
-          </tbody>
-          <tfoot><tr style="background:#ede9fe;font-weight:700">
-            <td colspan="3">الإجمالي</td>
-            <td style="text-align:center">${totalHours.toFixed(1)}</td>
-            <td></td>
-            <td style="text-align:center">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0))}</td>
-            <td style="text-align:center">${curr(hourlyJobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0))}</td>
-            <td style="text-align:center;color:#7c3aed">${curr(totalHourlyRevenue)}</td>
-          </tr></tfoot>
-        </table></div>
-      </div>`:''}
 
       <!-- Expenses section -->
       <div class="card mb10">
@@ -538,9 +473,8 @@ function openLoaderModal(id){
   const ld = id ? DB.getById('loaders',id) : null;
   const v  = (k,d='')=>ld?.[k]??d;
 
-  window._LDPrices      = ld ? JSON.parse(JSON.stringify(ld.prices||[])) : [];
-  window._LDPartners    = ld ? JSON.parse(JSON.stringify(ld.partners||[])) : [];
-  window._LDHPrices     = ld ? JSON.parse(JSON.stringify(ld.hourlyPrices||[])) : [];
+  window._LDPrices   = ld ? JSON.parse(JSON.stringify(ld.prices||[])) : [];
+  window._LDPartners = ld ? JSON.parse(JSON.stringify(ld.partners||[])) : [];
 
   const rPrices = ()=>{
     const el = document.getElementById('ld-prices');
@@ -579,24 +513,6 @@ function openLoaderModal(id){
   };
   window._rLDPartners = rPartners;
 
-  const rHourlyPrices = ()=>{
-    const el = document.getElementById('ld-hourly-prices');
-    if(!el) return;
-    const customers = DB.getAll('customers');
-    el.innerHTML = window._LDHPrices.map((hp,i)=>`
-      <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:6px;align-items:center;margin-bottom:5px">
-        <select onchange="window._LDHPrices[${i}].client=this.value" style="font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-family:inherit">
-          <option value="">اختر عميل</option>
-          ${customers.map(c=>`<option ${hp.client===c.name?'selected':''}>${c.name}</option>`).join('')}
-        </select>
-        <input type="number" min="0" step="0.5" value="${hp.pricePerHour||''}" placeholder="سعر/ساعة"
-          oninput="window._LDHPrices[${i}].pricePerHour=Number(this.value)"
-          style="font-size:11px;padding:4px 6px;border:1px solid #fde047;border-radius:5px;font-family:inherit">
-        <button onclick="window._LDHPrices.splice(${i},1);window._rLDHPrices()" style="background:#fee2e2;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;color:#dc2626">✕</button>
-      </div>`).join('')||'<div class="text-xs text-gray">لا توجد أسعار ساعة محددة</div>';
-  };
-  window._rLDHPrices = rHourlyPrices;
-
   const body = `
     <div class="form-row fr3">
       <div class="form-group"><label>اسم اللودر <span class="req">*</span></label><input id="ld-name" value="${v('name')}"></div>
@@ -621,13 +537,6 @@ function openLoaderModal(id){
     <div id="ld-prices"></div>
     <button onclick="window._LDPrices.push({material:'',pricePerM3:0});window._rLDPrices()" class="btn btn-gray btn-sm mt4">+ خامة</button>
 
-    <div class="section-title mt12 mb8">⏱️ أسعار الساعة لكل عميل</div>
-    <div style="font-size:11px;color:#64748b;margin-bottom:8px;padding:6px 10px;background:#fef9c3;border-radius:6px">
-      سعر الساعة يختلف من عميل لعميل — يُجلب تلقائياً عند إضافة يومية ساعات
-    </div>
-    <div id="ld-hourly-prices"></div>
-    <button onclick="window._LDHPrices.push({client:'',pricePerHour:0});window._rLDHPrices()" class="btn btn-gray btn-sm mt4">+ عميل</button>
-
     <div class="section-title mt12 mb8">👥 الشركاء في اللودر</div>
     <div style="font-size:11px;color:#64748b;margin-bottom:8px;padding:6px 10px;background:#f1f5f9;border-radius:6px">
       حدد نسبة ملكية كل شريك والمبلغ الذي دفعه فعلياً من حصته
@@ -641,7 +550,7 @@ function openLoaderModal(id){
     <button class="btn btn-primary" onclick="saveLoader(${id||'null'})">💾 حفظ اللودر</button>`;
 
   openModal((id?'تعديل':'إضافة')+' لودر', body, footer, 'modal-xl');
-  setTimeout(()=>{ rPrices(); rPartners(); rHourlyPrices(); }, 80);
+  setTimeout(()=>{ rPrices(); rPartners(); }, 80);
 }
 
 // ── Save loader ───────────────────────────────────────────────────
@@ -657,7 +566,6 @@ function saveLoader(id){
     purchasePrice:   Number(document.getElementById('ld-price')?.value)||0,
     usefulLifeMonths:Number(document.getElementById('ld-life')?.value)||60,
     prices:          window._LDPrices.filter(p=>p.material&&p.pricePerM3),
-    hourlyPrices:    window._LDHPrices.filter(p=>p.client&&p.pricePerHour),
     partners:        window._LDPartners.filter(p=>p.partnerName&&p.ownershipPct),
   };
 
@@ -747,20 +655,37 @@ function exportLoaderReportExcel(){
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// LOADER HOURLY JOBS — أعمال اللودر بالساعات
+// LOADER STATEMENTS — مستخلصات اللودر
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Helper: get hourly price for loader+client ────────────────────
-function getLoaderHourlyPrice(ld, clientName){
-  const hp = (ld.hourlyPrices||[]).find(p=>p.client===clientName);
-  return hp ? Number(hp.pricePerHour)||0 : 0;
+// ── Helper: get loader cumulative profit WITH hourly ──────────────
+function getLoaderCumulativeProfitFull(ld){
+  const allSarkis = DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي');
+  let revenue = 0;
+  allSarkis.forEach(sk=>{
+    (sk.lines||[]).forEach(ln=>{
+      if(ln.loaderName!==ld.name) return;
+      const net   = Number(ln.netSell||ln.netCubic)||0;
+      const price = getLoaderPrice(ld, sk.material);
+      revenue += net*price;
+    });
+  });
+  // Add hourly revenue
+  DB.getAll('loaderHours').filter(j=>j.loaderId===ld.id).forEach(j=>{
+    revenue += Number(j.netClient)||0;
+  });
+  const jExpenses = DB.getAll('journal').filter(j=>
+    j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح'
+  );
+  const expenses = jExpenses.reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
+  return revenue - expenses;
 }
 
-// ── Render hourly jobs tab ────────────────────────────────────────
-function renderLoaderHourly(loaders){
-  const selId = window._LDH_SEL || (loaders[0]?.id||null);
-  const from  = window._LDH_FROM || '';
-  const to    = window._LDH_TO   || '';
+// ── Render statements tab ─────────────────────────────────────────
+function renderLoaderStatements(loaders){
+  const selId = window._LDS_SEL || (loaders[0]?.id||null);
+  const from  = window._LDS_FROM || '';
+  const to    = window._LDS_TO   || '';
 
   const ldOpts = loaders.map(ld=>
     `<option value="${ld.id}" ${ld.id==selId?'selected':''}>${ld.name}</option>`
@@ -768,306 +693,305 @@ function renderLoaderHourly(loaders){
 
   const ld = loaders.find(l=>l.id==selId);
 
-  // jobs for this loader
-  const jobs = DB.getAll('loaderHours').filter(j=>{
-    if(j.loaderId !== selId) return false;
-    if(from && j.date < from) return false;
-    if(to   && j.date > to)   return false;
-    return true;
-  }).sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  // All approved statements for this loader
+  const stmts = DB.getAll('loaderStatements')
+    .filter(s=>s.loaderId===selId)
+    .sort((a,b)=>b.createdAt-a.createdAt);
 
-  const totHours    = jobs.reduce((s,j)=>s+(Number(j.hours)||0),0);
-  const totGross    = jobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0);
-  const totDisc     = jobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0);
-  const totNet      = jobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+  // Current period calc
+  let periodRevCubic=0, periodRevHourly=0, periodExp=0;
+  if(ld && from && to){
+    DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي'&&sk.date>=from&&sk.date<=to).forEach(sk=>{
+      (sk.lines||[]).forEach(ln=>{
+        if(ln.loaderName!==ld.name) return;
+        const net = Number(ln.netSell||ln.netCubic)||0;
+        periodRevCubic += net * getLoaderPrice(ld, sk.material);
+      });
+    });
+    DB.getAll('loaderHours').filter(j=>j.loaderId===selId&&j.date>=from&&j.date<=to).forEach(j=>{
+      periodRevHourly += Number(j.netClient)||0;
+    });
+    DB.getAll('journal').filter(j=>
+      j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح' &&
+      (j.date||'')>=from && (j.date||'')<=to
+    ).forEach(j=>{ periodExp += Number(j.amount||j.debitAmount)||0; });
+  }
+  const periodGrand  = periodRevCubic + periodRevHourly;
+  const periodProfit = periodGrand - periodExp;
+  const partners     = ld?.partners||[];
+  const companyPct   = 100 - partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
 
   return `<div>
+    <!-- Filter bar -->
     <div class="card mb12" style="padding:10px 14px">
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
         <div class="form-group" style="margin:0;min-width:160px">
           <label style="font-size:10px">اللودر</label>
-          <select onchange="window._LDH_SEL=Number(this.value)||null;nav('loaders')" style="width:100%">
+          <select onchange="window._LDS_SEL=Number(this.value)||null;nav('loaders')" style="width:100%">
             ${ldOpts}
           </select>
         </div>
         <div class="form-group" style="margin:0">
-          <label style="font-size:10px">من</label>
-          <input type="date" value="${from}" onchange="window._LDH_FROM=this.value;nav('loaders')">
+          <label style="font-size:10px">من تاريخ</label>
+          <input type="date" value="${from}" onchange="window._LDS_FROM=this.value;nav('loaders')">
         </div>
         <div class="form-group" style="margin:0">
-          <label style="font-size:10px">إلى</label>
-          <input type="date" value="${to}" onchange="window._LDH_TO=this.value;nav('loaders')">
+          <label style="font-size:10px">إلى تاريخ</label>
+          <input type="date" value="${to}" onchange="window._LDS_TO=this.value;nav('loaders')">
         </div>
-        <button class="btn btn-gray btn-sm" onclick="window._LDH_FROM='';window._LDH_TO='';nav('loaders')">✕</button>
-        <button class="btn btn-primary btn-sm" onclick="openLoaderHourlyModal(null,${selId||'null'})">+ إضافة يومية ساعات</button>
-        <button class="btn btn-gray btn-sm" onclick="printLoaderHourly()">🖨️ طباعة</button>
-        <button class="btn btn-gray btn-sm" onclick="exportLoaderHourlyExcel()">📊 Excel</button>
+        <button class="btn btn-gray btn-sm" onclick="window._LDS_FROM='';window._LDS_TO='';nav('loaders')">✕</button>
+        ${from&&to&&ld?`<button class="btn btn-primary btn-sm" onclick="openLoaderStmtApprove(${selId||'null'})">✅ اعتماد المستخلص</button>`:''}
+        <button class="btn btn-gray btn-sm" onclick="printLoaderStatement(${selId||'null'})">🖨️ طباعة</button>
       </div>
     </div>
 
-    <!-- KPIs -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-      ${[
-        ['إجمالي الساعات','⏱️',totHours.toFixed(1)+' س','#1d4ed8'],
-        ['إجمالي الإيراد','💰',curr(totGross),'#16a34a'],
-        ['خصم العميل','🔻',curr(totDisc),'#d97706'],
-        ['صافي الإيراد','📈',curr(totNet),totNet>=0?'#16a34a':'#dc2626'],
-      ].map(([l,ic,v,col])=>`
-        <div class="card-sm text-center">
-          <div class="text-xs text-gray mb4">${ic} ${l}</div>
-          <div style="font-size:13px;font-weight:700;color:${col}">${v}</div>
-        </div>`).join('')}
+    ${ld&&from&&to?`
+    <!-- Period summary -->
+    <div class="card mb12" style="background:linear-gradient(135deg,#1F4E78,#1a3a5c);color:#fff;padding:16px">
+      <div class="flex-between mb8">
+        <div>
+          <div style="font-size:18px;font-weight:700">🚜 ${ld.name} — مستخلص الفترة</div>
+          <div style="font-size:11px;opacity:.8;margin-top:4px">${fmtDate(from)} — ${fmtDate(to)}</div>
+        </div>
+        <div style="text-align:center;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 20px">
+          <div style="font-size:11px;opacity:.8">صافي الربح</div>
+          <div style="font-size:24px;font-weight:700;color:${periodProfit>=0?'#86efac':'#fca5a5'}">${curr(periodProfit)}</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        ${[
+          ['إيراد الخامات','📦',curr(periodRevCubic)],
+          ['إيراد الساعات','⏱️',curr(periodRevHourly)],
+          ['إجمالي الإيراد','💰',curr(periodGrand)],
+          ['المصاريف','💸',curr(periodExp)],
+        ].map(([l,ic,v])=>`
+          <div style="background:rgba(255,255,255,.1);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:10px;opacity:.7">${ic} ${l}</div>
+            <div style="font-size:13px;font-weight:700;margin-top:2px">${v}</div>
+          </div>`).join('')}
+      </div>
     </div>
 
-    <!-- Table -->
-    <div class="tbl-wrap"><table>
-      <thead><tr>
-        <th>#</th><th>التاريخ</th><th>العميل</th><th>البيان</th>
-        <th style="text-align:center">الساعات</th>
-        <th style="text-align:center">سعر/ساعة</th>
-        <th style="text-align:center">الإجمالي</th>
-        <th style="text-align:center;background:#d97706;color:#fff">خصم عميل</th>
-        <th style="text-align:center;color:#16a34a">صافي الإيراد</th>
-        <th>إجراء</th>
-      </tr></thead>
-      <tbody>
-        ${jobs.length===0
-          ? `<tr><td colspan="13" class="tbl-empty"><span class="tbl-empty-icon">⏱️</span>لا توجد بيانات — أضف يومية ساعات</td></tr>`
-          : jobs.map((j,i)=>{
+    <!-- Partner shares for period -->
+    <div class="card mb12">
+      <div class="section-title mb8">💰 توزيع أرباح الفترة على الشركاء</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+        ${[{partnerName:'الشركة',ownershipPct:companyPct},...partners].map(pt=>{
+          const share = periodProfit * Number(pt.ownershipPct)/100;
+          // Already disbursed in this period
+          const disbursedPeriod = DB.getAll('journal').filter(j=>
+            j.entryType==='يدوي' && j.loaderId===ld.id &&
+            j.loaderExpType==='توزيع أرباح' &&
+            j.party===pt.partnerName &&
+            (j.date||'')>=from && (j.date||'')<=to
+          ).reduce((s,j)=>s+(Number(j.debitAmount)||0),0);
+          const remaining = share - disbursedPeriod;
+          return `<div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+            <div style="font-weight:700">${pt.partnerName==='الشركة'?'🏢':'🤝'} ${pt.partnerName}</div>
+            <div style="font-size:11px;color:#7c3aed;margin:4px 0">${pt.ownershipPct}% ملكية</div>
+            <div style="font-size:13px;font-weight:700;color:#16a34a">حصته من الفترة: ${curr(share)}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">مصروف في الفترة: ${curr(disbursedPeriod)}</div>
+            <div style="font-size:12px;font-weight:700;color:${remaining>0?'#d97706':'#16a34a'};margin-top:4px">المتبقي: ${curr(remaining)}</div>
+            ${pt.partnerName!=='الشركة'&&remaining>0?`
+            <button data-lid="${ld.id}" data-pname="${pt.partnerName}" data-amt="${remaining}"
+              onclick="openLoaderDisburseModal(Number(this.dataset.lid),this.dataset.pname)"
+              style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit;margin-top:6px;width:100%">💸 صرف الآن</button>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:'<div class="card" style="text-align:center;padding:30px"><div style="font-size:32px">📅</div><p class="text-gray mt8">اختر اللودر والفترة لعرض المستخلص</p></div>'}
 
-              return `<tr>
-                <td class="text-gray text-xs">${i+1}</td>
-                <td>${fmtDate(j.date)}</td>
-                <td><strong>${j.client||'—'}</strong></td>
-                <td class="text-xs text-gray">${j.description||'—'}</td>
-                <td style="text-align:center;font-weight:700">${Number(j.hours)||0}</td>
-                <td style="text-align:center">${curr(j.pricePerHour||0)}</td>
-                <td style="text-align:center;font-weight:700;color:#1d4ed8">${curr(j.grossAmount||0)}</td>
-                <td style="text-align:center;color:#d97706">${curr(j.discountClient||0)}</td>
-                <td style="text-align:center;font-weight:700;color:#16a34a">${curr(j.netClient||0)}</td>
-                <td>
-                  <button class="btn-icon" onclick="openLoaderHourlyModal(${j.id},${selId||'null'})" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px">✏️</button>
-                  <button class="btn-icon" onclick="deleteLoaderHourly(${j.id})" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px">🗑️</button>
-                </td>
-              </tr>`;
-            }).join('')}
-      </tbody>
-      ${jobs.length>0?`<tfoot><tr style="background:#fefce8;font-weight:700">
-        <td colspan="4">الإجمالي</td>
-        <td style="text-align:center">${totHours.toFixed(1)}</td>
-        <td></td>
-        <td style="text-align:center;color:#1d4ed8">${curr(totGross)}</td>
-        <td style="text-align:center;color:#d97706">${curr(totDisc)}</td>
-        <td style="text-align:center;color:#16a34a">${curr(totNet)}</td>
-        <td></td>
-      </tr></tfoot>`:''}
-    </table></div>
+    <!-- Archived statements -->
+    <div class="card">
+      <div class="section-title mb8">📋 المستخلصات المعتمدة والمؤرشفة</div>
+      ${stmts.length===0
+        ? '<div class="tbl-empty">لا توجد مستخلصات معتمدة بعد</div>'
+        : `<div class="tbl-wrap"><table>
+          <thead><tr>
+            <th>#</th><th>الفترة</th><th>إيراد خامات</th><th>إيراد ساعات</th>
+            <th>المصاريف</th><th>صافي الربح</th><th>تاريخ الاعتماد</th><th>إجراء</th>
+          </tr></thead>
+          <tbody>
+            ${stmts.map((s,i)=>`<tr>
+              <td class="font-mono font-bold text-brand">#${s.id}</td>
+              <td class="text-xs">${fmtDate(s.from)} — ${fmtDate(s.to)}</td>
+              <td class="tabular">${curr(s.revCubic||0)}</td>
+              <td class="tabular">${curr(s.revHourly||0)}</td>
+              <td class="tabular text-red">${curr(s.expenses||0)}</td>
+              <td class="tabular font-bold ${(s.netProfit||0)>=0?'text-brand':'text-red'}">${curr(s.netProfit||0)}</td>
+              <td class="text-xs text-gray">${fmtDate(s.createdAt)}</td>
+              <td>
+                <button class="btn btn-gray btn-sm" onclick="printArchivedLoaderStmt(${s.id})">🖨️</button>
+                <button class="btn btn-gray btn-sm" style="color:#dc2626" onclick="deleteLoaderStmt(${s.id})">🗑️</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>`}
+    </div>
   </div>`;
 }
 
-// ── Modal: add/edit hourly job ────────────────────────────────────
-function openLoaderHourlyModal(jobId, loaderId){
-  const loaders   = DB.getAll('loaders');
-  const customers = DB.getAll('customers');
-  const job = jobId ? DB.getById('loaderHours', jobId) : null;
-  const ld  = loaders.find(l=>l.id==loaderId) || loaders[0];
-  const v   = (k,d='')=>job?.[k]??d;
+// ── Approve and archive statement ─────────────────────────────────
+function openLoaderStmtApprove(loaderId){
+  const ld   = DB.getById('loaders', loaderId);
+  const from = window._LDS_FROM;
+  const to   = window._LDS_TO;
+  if(!ld||!from||!to) return toast('حدد اللودر والفترة أولاً','error');
 
-  const ldOpts = loaders.map(l=>
-    `<option value="${l.id}" ${l.id==(job?.loaderId||loaderId)?'selected':''}>${l.name}</option>`
-  ).join('');
+  let revCubic=0, revHourly=0, expenses=0;
+  DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي'&&sk.date>=from&&sk.date<=to).forEach(sk=>{
+    (sk.lines||[]).forEach(ln=>{
+      if(ln.loaderName!==ld.name) return;
+      revCubic += (Number(ln.netSell||ln.netCubic)||0) * getLoaderPrice(ld, sk.material);
+    });
+  });
+  DB.getAll('loaderHours').filter(j=>j.loaderId===loaderId&&j.date>=from&&j.date<=to).forEach(j=>{
+    revHourly += Number(j.netClient)||0;
+  });
+  DB.getAll('journal').filter(j=>
+    j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح' &&
+    (j.date||'')>=from && (j.date||'')<=to
+  ).forEach(j=>{ expenses += Number(j.amount||j.debitAmount)||0; });
 
-  const calcRow = ()=>`
-    <script>
-    (function(){
-      function recalc(){
-        var ld = DB.getAll('loaders').find(l=>l.id==Number(document.getElementById('lh-loader').value));
-        var client = document.getElementById('lh-client').value;
-        var hours  = Number(document.getElementById('lh-hours').value)||0;
-        var hp = (ld?.hourlyPrices||[]).find(p=>p.client===client);
-        var price = hp ? Number(hp.pricePerHour)||0 : 0;
-        document.getElementById('lh-price').value = price;
-        var gross = hours * price;
-        document.getElementById('lh-gross').textContent = curr(gross);
-        var discC = Number(document.getElementById('lh-disc-client').value)||0;
-        var net   = Math.max(0, gross - discC);
-        document.getElementById('lh-net-client').textContent = curr(net);
-      }
-      window._lhRecalc = recalc;
-      setTimeout(recalc, 100);
-    })();
-    <\/script>`;
+  const netProfit = revCubic + revHourly - expenses;
+  const partners  = ld.partners||[];
+  const companyPct= 100 - partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
 
-  const body = `
-    <div class="form-row fr2 mb8">
-      <div class="form-group"><label>اللودر <span class="req">*</span></label>
-        <select id="lh-loader" onchange="window._lhRecalc&&window._lhRecalc()">
-          ${ldOpts}
-        </select>
-      </div>
-      <div class="form-group"><label>التاريخ <span class="req">*</span></label>
-        <input type="date" id="lh-date" value="${v('date',todayStr())}">
-      </div>
+  const sharesHtml = [{partnerName:'الشركة',ownershipPct:companyPct},...partners].map(pt=>`
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9">
+      <span>${pt.partnerName} (${pt.ownershipPct}%)</span>
+      <strong style="color:#1d4ed8">${curr(netProfit * Number(pt.ownershipPct)/100)}</strong>
+    </div>`).join('');
+
+  openModal('اعتماد مستخلص اللودر', `
+    <div class="alert alert-blue mb12">
+      <span>📋</span>
+      <div>الفترة: <strong>${fmtDate(from)}</strong> — <strong>${fmtDate(to)}</strong></div>
     </div>
-    <div class="form-row fr2 mb8">
-      <div class="form-group"><label>العميل <span class="req">*</span></label>
-        <select id="lh-client" onchange="window._lhRecalc&&window._lhRecalc()">
-          <option value="">— اختر عميل —</option>
-          ${customers.map(c=>`<option ${(job?.client||'')==c.name?'selected':''}>${c.name}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group"><label>البيان</label>
-        <input id="lh-desc" value="${v('description')}" placeholder="وصف العمل">
-      </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="card-sm text-center"><div class="text-xs text-gray">إيراد الخامات</div><div class="font-bold text-brand">${curr(revCubic)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray">إيراد الساعات</div><div class="font-bold text-brand">${curr(revHourly)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray">المصاريف</div><div class="font-bold text-red">${curr(expenses)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray">صافي الربح</div><div class="font-bold" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${curr(netProfit)}</div></div>
     </div>
-    <div class="form-row fr3 mb8">
-      <div class="form-group"><label>عدد الساعات <span class="req">*</span></label>
-        <input type="number" id="lh-hours" min="0" step="0.5" value="${v('hours',0)}" oninput="window._lhRecalc&&window._lhRecalc()">
-      </div>
-      <div class="form-group"><label>سعر الساعة (ج.م)</label>
-        <input type="number" id="lh-price" min="0" step="0.5" value="${v('pricePerHour',0)}" oninput="window._lhRecalc&&window._lhRecalc()">
-      </div>
-      <div class="form-group"><label>الإجمالي</label>
-        <div id="lh-gross" style="font-size:16px;font-weight:700;color:#1d4ed8;padding:8px 0">${curr(v('grossAmount',0))}</div>
-      </div>
-    </div>
-    <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">
-      <div class="form-group" style="margin-bottom:8px">
-        <label style="color:#d97706">خصم على العميل (ج.م) — اختياري</label>
-        <input type="number" id="lh-disc-client" min="0" value="${v('discountClient',0)}" oninput="window._lhRecalc&&window._lhRecalc()">
-      </div>
-      <div style="font-size:13px;font-weight:700">
-        صافي الإيراد: <span id="lh-net-client" style="color:#16a34a">${curr(v('netClient',0))}</span>
-      </div>
-    </div>
-    ${calcRow()}`;
-
-  const foot = `
-    <button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
-    <button class="btn btn-primary" onclick="saveLoaderHourly(${jobId||'null'})">💾 حفظ</button>`;
-
-  openModal((jobId?'تعديل':'إضافة')+' يومية ساعات لودر', body, foot, 'modal-lg');
+    <div class="section-title mb6">توزيع الأرباح</div>
+    ${sharesHtml}
+    <div class="form-group mt12">
+      <label>ملاحظات</label>
+      <textarea id="stmt-notes" rows="2" placeholder="ملاحظات اختيارية"></textarea>
+    </div>`,
+    `<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
+     <button class="btn btn-primary" onclick="saveLoaderStatement(${loaderId},${JSON.stringify(from)},${JSON.stringify(to)},${revCubic},${revHourly},${expenses},${netProfit})">✅ اعتماد وأرشفة</button>`,
+    'modal-lg'
+  );
 }
 
-function saveLoaderHourly(jobId){
-  const loaderId = Number(document.getElementById('lh-loader')?.value)||null;
-  const date     = document.getElementById('lh-date')?.value;
-  const client   = document.getElementById('lh-client')?.value;
-  const hours    = Number(document.getElementById('lh-hours')?.value)||0;
-  const price    = Number(document.getElementById('lh-price')?.value)||0;
-
-  if(!loaderId||!date||!client||!hours) return toast('أكمل الحقول المطلوبة','error');
-
-  const gross      = hours * price;
-  const discClient = Number(document.getElementById('lh-disc-client')?.value)||0;
-  const netClient  = Math.max(0, gross - discClient);
-
-  const data = {
-    loaderId, date, client,
-    description: document.getElementById('lh-desc')?.value||'',
-    hours, pricePerHour:price,
-    grossAmount:   gross,
-    discountClient: discClient,
-    netClient,
-  };
-
-  if(jobId) DB.update('loaderHours', jobId, data);
-  else      DB.insert('loaderHours', data);
-
-  toast('✅ تم الحفظ');
+function saveLoaderStatement(loaderId, from, to, revCubic, revHourly, expenses, netProfit){
+  const notes = document.getElementById('stmt-notes')?.value||'';
+  DB.insert('loaderStatements',{
+    loaderId, from, to,
+    revCubic, revHourly,
+    expenses, netProfit,
+    notes,
+    createdAt: Date.now(),
+    status: 'معتمد',
+  });
+  toast('✅ تم اعتماد وأرشفة المستخلص');
   closeModal();
   nav('loaders');
 }
 
-function deleteLoaderHourly(id){
-  confirmDelete('حذف هذه اليومية؟', ()=>{
-    DB.remove('loaderHours', id);
+function deleteLoaderStmt(id){
+  confirmDelete('حذف هذا المستخلص من الأرشيف؟',()=>{
+    DB.remove('loaderStatements', id);
     toast('تم الحذف');
     nav('loaders');
   });
 }
 
-function printLoaderHourly(){
-  const loaders = DB.getAll('loaders');
-  const selId   = window._LDH_SEL;
-  const ld      = loaders.find(l=>l.id==selId);
+function printLoaderStatement(loaderId){
+  const ld   = DB.getAll('loaders').find(l=>l.id==loaderId);
+  const from = window._LDS_FROM||'';
+  const to   = window._LDS_TO||'';
   if(!ld){ toast('اختر لودراً أولاً','error'); return; }
-  const from = window._LDH_FROM||'';
-  const to   = window._LDH_TO||'';
-  const jobs = DB.getAll('loaderHours').filter(j=>{
-    if(j.loaderId!==selId) return false;
-    if(from && j.date<from) return false;
-    if(to   && j.date>to)   return false;
-    return true;
-  }).sort((a,b)=>a.date.localeCompare(b.date));
 
-  const _n2 = n=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(Number(n)||0)+' ج.م';
-  const _d2 = d=>{ if(!d)return'—'; const dd=new Date(d); return isNaN(dd)?'—':dd.toLocaleDateString('ar-EG',{day:'2-digit',month:'2-digit',year:'numeric'}); };
+  let revCubic=0, revHourly=0, expenses=0;
+  const cubicRows=[], hourlyRows=[], expRows=[];
 
-  const rows = jobs.map((j,i)=>`<tr>
-    <td>${i+1}</td><td>${_d2(j.date)}</td><td>${j.client||'—'}</td><td>${j.description||'—'}</td>
-    <td>${Number(j.hours)||0}</td><td>${_n2(j.pricePerHour)}</td><td>${_n2(j.grossAmount)}</td>
-    <td>${_n2(j.discountClient)}</td><td>${_n2(j.netClient)}</td>
-  </tr>`).join('');
+  DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to)).forEach(sk=>{
+    (sk.lines||[]).forEach(ln=>{
+      if(ln.loaderName!==ld.name) return;
+      const net = Number(ln.netSell||ln.netCubic)||0;
+      const price = getLoaderPrice(ld, sk.material);
+      const rev = net*price;
+      revCubic += rev;
+      cubicRows.push(`<tr><td>${sk.date}</td><td>#${sk.id}</td><td>${sk.client}</td><td>${sk.material}</td><td>${net.toFixed(1)}</td><td>${price}</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(rev)}</td></tr>`);
+    });
+  });
+  DB.getAll('loaderHours').filter(j=>j.loaderId===loaderId&&(!from||j.date>=from)&&(!to||j.date<=to)).forEach(j=>{
+    revHourly += Number(j.netClient)||0;
+    hourlyRows.push(`<tr><td>${j.date}</td><td>${j.client}</td><td>${j.description||'—'}</td><td>${j.hours}</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.pricePerHour||0)}</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.netClient||0)}</td></tr>`);
+  });
+  DB.getAll('journal').filter(j=>j.loaderId===ld.id&&j.loaderExpType!=='توزيع أرباح'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to)).forEach(j=>{
+    const amt = Number(j.amount||j.debitAmount)||0;
+    expenses += amt;
+    expRows.push(`<tr><td>${j.date}</td><td>${j.loaderExpType||'أخرى'}</td><td>${j.description||'—'}</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(amt)}</td></tr>`);
+  });
+
+  const netProfit = revCubic + revHourly - expenses;
+  const co = DB.getCompany();
+  const _n = n=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(n)+' ج.م';
+  const partners = ld.partners||[];
+  const companyPct = 100-partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
+  const sharesHtml = [{partnerName:'الشركة',ownershipPct:companyPct},...partners].map(pt=>
+    `<tr><td>${pt.partnerName}</td><td>${pt.ownershipPct}%</td><td style="font-weight:700;color:#1F4E78">${_n(netProfit*Number(pt.ownershipPct)/100)}</td></tr>`
+  ).join('');
+
+  const css=`*{font-family:Tahoma,sans-serif;direction:rtl;font-size:10px}body{padding:12px}
+    h2{color:#1F4E78;font-size:14px;margin:0 0 4px}
+    .hdr{border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+    th{background:#1F4E78;color:#fff;padding:5px 6px;text-align:right}
+    td{padding:4px 6px;border-bottom:1px solid #eee}
+    tfoot td{background:#fefce8;font-weight:700}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+    .kpi-box{border:1px solid #e2e8f0;border-radius:6px;padding:8px;text-align:center}
+    .kpi-label{font-size:9px;color:#64748b}.kpi-val{font-size:13px;font-weight:700}
+    .section{font-size:12px;font-weight:700;color:#1F4E78;margin:10px 0 4px;border-right:3px solid #1F4E78;padding-right:6px}
+    @media print{@page{margin:9mm}}`;
 
   const w = window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
-    <style>*{font-family:Tahoma,sans-serif;font-size:10px;direction:rtl}body{padding:12px}
-    table{width:100%;border-collapse:collapse}th{background:#1F4E78;color:#fff;padding:5px}
-    td{padding:4px;border-bottom:1px solid #eee}tfoot tr{background:#fefce8;font-weight:700}
-    @media print{@page{margin:9mm}}</style></head><body>
-    <h3 style="color:#1F4E78">${DB.getCompany().name||''} — أعمال اللودر بالساعات: ${ld.name}</h3>
-    <p style="color:#555;font-size:9px">الفترة: ${from||'البداية'} — ${to||'اليوم'}</p>
-    <table><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>البيان</th>
-      <th>الساعات</th><th>سعر/ساعة</th><th>الإجمالي</th>
-      <th>خصم عميل</th><th>صافي الإيراد</th>
-    </tr></thead><tbody>${rows}</tbody></table>
-    <script>setTimeout(()=>window.print(),500)<\/script></body></html>`);
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>مستخلص لودر</title><style>${css}</style></head><body>
+    <div class="hdr">
+      <h2>${co.name||'شركة الهنا للنقل'} — مستخلص لودر: ${ld.name}</h2>
+      <div style="font-size:9px;color:#555">الفترة: ${from||'البداية'} — ${to||'اليوم'} | تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-box"><div class="kpi-label">إيراد الخامات</div><div class="kpi-val" style="color:#16a34a">${_n(revCubic)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">إيراد الساعات</div><div class="kpi-val" style="color:#7c3aed">${_n(revHourly)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">المصاريف</div><div class="kpi-val" style="color:#dc2626">${_n(expenses)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">صافي الربح</div><div class="kpi-val" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${_n(netProfit)}</div></div>
+    </div>
+    ${cubicRows.length?`<div class="section">📦 إيراد الخامات</div>
+    <table><thead><tr><th>التاريخ</th><th>حافظة</th><th>العميل</th><th>الخامة</th><th>م³</th><th>سعر/م³</th><th>الإيراد</th></tr></thead>
+    <tbody>${cubicRows.join('')}</tbody><tfoot><tr><td colspan="6">الإجمالي</td><td>${_n(revCubic)}</td></tr></tfoot></table>`:''}
+    ${hourlyRows.length?`<div class="section">⏱️ إيراد الساعات</div>
+    <table><thead><tr><th>التاريخ</th><th>العميل</th><th>البيان</th><th>الساعات</th><th>سعر/ساعة</th><th>صافي الإيراد</th></tr></thead>
+    <tbody>${hourlyRows.join('')}</tbody><tfoot><tr><td colspan="5">الإجمالي</td><td>${_n(revHourly)}</td></tr></tfoot></table>`:''}
+    ${expRows.length?`<div class="section">💸 المصاريف</div>
+    <table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th></tr></thead>
+    <tbody>${expRows.join('')}</tbody><tfoot><tr><td colspan="3">الإجمالي</td><td>${_n(expenses)}</td></tr></tfoot></table>`:''}
+    <div class="section">💰 توزيع الأرباح</div>
+    <table><thead><tr><th>الشريك</th><th>نسبة الملكية</th><th>حصته من الربح</th></tr></thead>
+    <tbody>${sharesHtml}</tbody></table>
+    <script>setTimeout(()=>window.print(),600)<\/script></body></html>`);
   w.document.close();
 }
 
-function exportLoaderHourlyExcel(){
-  if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
-  const loaders = DB.getAll('loaders');
-  const selId   = window._LDH_SEL;
-  const ld      = loaders.find(l=>l.id==selId);
-  if(!ld){ toast('اختر لودراً أولاً','error'); return; }
-  const from = window._LDH_FROM||'';
-  const to   = window._LDH_TO||'';
-  const jobs = DB.getAll('loaderHours').filter(j=>{
-    if(j.loaderId!==selId) return false;
-    if(from && j.date<from) return false;
-    if(to   && j.date>to)   return false;
-    return true;
-  }).sort((a,b)=>a.date.localeCompare(b.date));
-
-  const co = DB.getCompany();
-  const header = [
-    [co.name||'شركة الهنا للنقل','','أعمال اللودر بالساعات: '+ld.name,'','','','','','','','',''],
-    ['الفترة: '+(from||'البداية')+' — '+(to||'اليوم'),'','','','','','','','','','',''],
-    [],
-    ['#','التاريخ','العميل','البيان','الساعات','سعر/ساعة','الإجمالي','خصم عميل','صافي الإيراد'],
-  ];
-  const rows = jobs.map((j,i)=>[
-    i+1,
-    j.date?j.date.split('-').reverse().join('/'):'-',
-    j.client||'', j.description||'',
-    Number(j.hours)||0, Number(j.pricePerHour)||0,
-    Number(j.grossAmount)||0, Number(j.discountClient)||0,
-    Number(j.netClient)||0,
-  ]);
-
-  const totRow = ['','','','الإجمالي',
-    jobs.reduce((s,j)=>s+(Number(j.hours)||0),0),'',
-    jobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0),
-    jobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0),
-    jobs.reduce((s,j)=>s+(Number(j.netClient)||0),0),
-  ];
-
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([...header,...rows,totRow]);
-  ws['!cols']=[{wch:4},{wch:12},{wch:16},{wch:20},{wch:8},{wch:10},{wch:12},{wch:10},{wch:12},{wch:10},{wch:12},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, ws, 'ساعات '+ld.name.slice(0,25));
-  XLSX.writeFile(wb, 'ساعات_لودر_'+ld.name+'.xlsx');
-  toast('✅ تم التصدير');
+function printArchivedLoaderStmt(stmtId){
+  const stmt = DB.getById('loaderStatements', stmtId);
+  if(!stmt) return toast('المستخلص غير موجود','error');
+  window._LDS_FROM = stmt.from;
+  window._LDS_TO   = stmt.to;
+  printLoaderStatement(stmt.loaderId);
 }
