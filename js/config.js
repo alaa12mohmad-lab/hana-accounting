@@ -9,7 +9,7 @@ const FB_CONFIG_KEY  = 'hana_fb_config';
 const COLLECTIONS = [
   'customers','suppliers','materials','trucks',
   'partners','accounts','journal','sarkis',
-  'cheques','statements','expenses','notes','loaders','loaderHours',
+  'cheques','statements','expenses','notes','loaders','loaderHours','loaderStatements',
 ];
 
 // ── Roles & Permissions ──────────────────────────────────────────
