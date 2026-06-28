@@ -919,6 +919,38 @@ function renderLoaderLoading(loaders){
   </div>`;
 }
 
+// ── Global recalc functions for loading modal ────────────────────
+function llLineRecalc(i){
+  var ln = window._LLLines && window._LLLines[i];
+  if(!ln) return;
+  var gm3 = (Number(ln.trips)||0) * (Number(ln.cubicPerTrip)||0);
+  var nm3 = Math.max(0, gm3 - (Number(ln.discountM3)||0));
+  var amt = nm3 * (Number(ln.pricePerM3)||0);
+  ln.grossM3 = gm3; ln.netM3 = nm3; ln.grossAmount = amt;
+  var gEl = document.getElementById('ll-gm3-'+i);
+  var nEl = document.getElementById('ll-nm3-'+i);
+  var aEl = document.getElementById('ll-amt-'+i);
+  if(gEl) gEl.textContent = gm3.toFixed(1);
+  if(nEl) nEl.textContent = nm3.toFixed(1);
+  if(aEl) aEl.textContent = curr(amt);
+  llUpdateTotals();
+}
+
+function llUpdateTotals(){
+  var lines = window._LLLines || [];
+  var totTrips = lines.reduce(function(s,l){ return s+(Number(l.trips)||0); }, 0);
+  var totGM3   = lines.reduce(function(s,l){ return s+(Number(l.grossM3)||0); }, 0);
+  var totNM3   = lines.reduce(function(s,l){ return s+(Number(l.netM3)||0); }, 0);
+  var totAmt   = lines.reduce(function(s,l){ return s+(Number(l.grossAmount)||0); }, 0);
+  var discC    = Number(document.getElementById('ll-disc-client')?.value)||0;
+  var net      = Math.max(0, totAmt - discC);
+  var t = document.getElementById('ll-tot-trips'); if(t) t.textContent = totTrips;
+  var g = document.getElementById('ll-tot-gm3');   if(g) g.textContent = totGM3.toFixed(1);
+  var n = document.getElementById('ll-tot-nm3');   if(n) n.textContent = totNM3.toFixed(1);
+  var a = document.getElementById('ll-tot-amt');   if(a) a.textContent = curr(totAmt);
+  var nt= document.getElementById('ll-net-total'); if(nt) nt.textContent = curr(net);
+}
+
 // ── Helper: get loading price for client+workType ─────────────────
 function getLoaderLoadingPrice(ld, clientName, workType){
   const p = (ld.loadingPrices||[]).find(p=>p.client===clientName&&p.workType===workType);
@@ -1053,43 +1085,14 @@ function openLoaderLoadingModal(jobId, loaderId){
       <div id="ll-net-total" style="font-size:20px;font-weight:700;color:#16a34a">0.00 ج.م</div>
     </div>
 
-    <script>
-    function llLineRecalc(i){
-      var ln=window._LLLines[i];
-      var gm3=(ln.trips||0)*(ln.cubicPerTrip||0);
-      var nm3=Math.max(0,gm3-(ln.discountM3||0));
-      var amt=nm3*(ln.pricePerM3||0);
-      ln.grossM3=gm3; ln.netM3=nm3; ln.grossAmount=amt;
-      var gEl=document.getElementById('ll-gm3-'+i);
-      var nEl=document.getElementById('ll-nm3-'+i);
-      var aEl=document.getElementById('ll-amt-'+i);
-      if(gEl) gEl.textContent=gm3.toFixed(1);
-      if(nEl) nEl.textContent=nm3.toFixed(1);
-      if(aEl) aEl.textContent=curr(amt);
-      llUpdateTotals();
-    }
-    function llUpdateTotals(){
-      var lines=window._LLLines||[];
-      var totTrips=lines.reduce(function(s,l){return s+(Number(l.trips)||0);},0);
-      var totGM3=lines.reduce(function(s,l){return s+(Number(l.grossM3)||0);},0);
-      var totNM3=lines.reduce(function(s,l){return s+(Number(l.netM3)||0);},0);
-      var totAmt=lines.reduce(function(s,l){return s+(Number(l.grossAmount)||0);},0);
-      var discC=Number(document.getElementById('ll-disc-client')?.value)||0;
-      var net=Math.max(0,totAmt-discC);
-      var t=document.getElementById('ll-tot-trips');if(t)t.textContent=totTrips;
-      var g=document.getElementById('ll-tot-gm3');if(g)g.textContent=totGM3.toFixed(1);
-      var n=document.getElementById('ll-tot-nm3');if(n)n.textContent=totNM3.toFixed(1);
-      var a=document.getElementById('ll-tot-amt');if(a)a.textContent=curr(totAmt);
-      var nt=document.getElementById('ll-net-total');if(nt)nt.textContent=curr(net);
-    }
-    setTimeout(function(){window._rLLLines();},100);
-    <\/script>`;
+`;
 
   const foot = `
     <button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
     <button class="btn btn-primary" onclick="saveLoaderLoading(${jobId||'null'})">💾 حفظ</button>`;
 
   openModal((jobId?'تعديل':'إضافة')+' عمل تحميل لودر', body, foot, 'modal-xl');
+  setTimeout(()=>{ window._rLLLines && window._rLLLines(); }, 150);
 }
 
 function saveLoaderLoading(jobId){
