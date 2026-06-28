@@ -262,7 +262,12 @@ function printCustStmt(){
   const lastStmt=getLastStatement(_CS.party,'customer');
   const opening=lastStmt?Number(lastStmt.closingBalance)||0:Number(cs?.openingBalance)||0;
   const fd=new Date(_CS.from),td=new Date(_CS.to);
-  const sarkis=DB.getAll('sarkis').filter(sk=>{const d=new Date(sk.date);return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);});
+
+  const sarkis=DB.getAll('sarkis').filter(sk=>{
+    const d=new Date(sk.date);
+    return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);
+  });
+
   const colls=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
     if(!(d>=fd&&d<=td)) return false;
@@ -270,15 +275,52 @@ function printCustStmt(){
     if(j.entryType==='يدوي'&&j.party===_CS.party&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
     return false;
   }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.creditAmount)||0,paymentType:'قيد يدوي'}:j);
-  const totalSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
+
+  // أعمال الساعات للعميل
+  const hourlyJobs=DB.getAll('loaderHours').filter(j=>{
+    const d=new Date(j.date);
+    return j.client===_CS.party&&d>=fd&&d<=td;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+
+  // أعمال التحميل للعميل
+  const loadingJobs=DB.getAll('loaderLoading').filter(j=>{
+    const d=new Date(j.date);
+    return j.client===_CS.party&&d>=fd&&d<=td;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+
+  const totalSarkisSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
+  const totalHourlySell=hourlyJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+  const totalLoadingSell=loadingJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+  const totalSell=totalSarkisSell+totalHourlySell+totalLoadingSell;
   const totalColl=colls.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const balance=opening+totalSell-totalColl;
+
+  const hourlySection = hourlyJobs.length===0 ? '' : `
+  <p style="font-weight:700;margin:8px 0 5px;color:#7c3aed">⏱️ أعمال اللودر بالساعات (${hourlyJobs.length})</p>
+  <table><thead><tr><th>التاريخ</th><th>اللودر</th><th>البيان</th><th style="text-align:center">الساعات</th><th style="text-align:center">سعر/ساعة</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+  <tbody>${hourlyJobs.map(j=>{
+    const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
+    return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.description||'—'}</td><td style="text-align:center">${Number(j.hours)||0}</td><td style="text-align:center">${_n(j.pricePerHour||0)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#7c3aed">${_n(j.netClient||0)}</td></tr>`;
+  }).join('')}</tbody>
+  <tfoot><tr><td colspan="6">الإجمالي</td><td style="color:#7c3aed;font-weight:700">${_n(totalHourlySell)}</td></tr></tfoot></table>`;
+
+  const loadingSection = loadingJobs.length===0 ? '' : `
+  <p style="font-weight:700;margin:8px 0 5px;color:#0369a1">🚛 أعمال اللودر تحميل (${loadingJobs.length})</p>
+  <table><thead><tr><th>التاريخ</th><th>اللودر</th><th>نوع العمل</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+  <tbody>${loadingJobs.map(j=>{
+    const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
+    return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.workType||'تحميل'}</td><td style="text-align:center">${Number(j.trips)||0}</td><td style="text-align:center">${(Number(j.netM3)||0).toFixed(1)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#0369a1">${_n(j.netClient||0)}</td></tr>`;
+  }).join('')}</tbody>
+  <tfoot><tr><td colspan="6">الإجمالي</td><td style="color:#0369a1;font-weight:700">${_n(totalLoadingSell)}</td></tr></tfoot></table>`;
+
   _pw('مستخلص عميل — '+_CS.party,`<div class="hdr"><div><div class="co">شركة الهنا للنقل</div><div class="co-sub">مستخلص حساب عميل</div><div class="co-sub">الفترة: ${_d(_CS.from)} — ${_d(_CS.to)}</div></div><div style="font-size:14px;font-weight:700;color:#1F4E78">${_CS.party}</div></div>
   <div class="kpis" style="margin-bottom:9px"><div class="kc"><div class="kl">الرصيد الافتتاحي</div><div class="kv">${_n(opening)}</div></div><div class="kc"><div class="kl">إجمالي المبيعات</div><div class="kv">${_n(totalSell)}</div></div><div class="kc green"><div class="kl">إجمالي التحصيلات</div><div class="kv">${_n(totalColl)}</div></div><div class="kc ${balance>0?'red':'green'}"><div class="kl">الرصيد المستحق</div><div class="kv">${_n(balance)}</div></div></div>
   <p style="font-weight:700;margin-bottom:5px">الحوافظ (${sarkis.length})</p>
   <table><thead><tr><th>#</th><th>التاريخ</th><th>الخامة</th><th>م³</th><th>إجمالي البيع</th><th>المورد</th></tr></thead>
   <tbody>${sarkis.map(sk=>`<tr><td style="font-family:monospace">#${sk.id}</td><td>${_d(sk.date)}</td><td>${sk.material}</td><td style="text-align:center">${(Number(sk.totalNet)||0).toFixed(1)}</td><td style="font-weight:600;color:#1F4E78">${_n(sk.totalSell)}</td><td>${sk.supplier}</td></tr>`).join('')}</tbody>
-  <tfoot><tr><td colspan="3">الإجمالي</td><td style="text-align:center">${sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0).toFixed(1)}</td><td>${_n(totalSell)}</td><td></td></tr></tfoot></table>
+  <tfoot><tr><td colspan="3">الإجمالي</td><td style="text-align:center">${sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0).toFixed(1)}</td><td>${_n(totalSarkisSell)}</td><td></td></tr></tfoot></table>
+  ${hourlySection}
+  ${loadingSection}
   <p style="font-weight:700;margin:8px 0 5px">التحصيلات من اليومية (${colls.length})</p>
   <table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البيان</th></tr></thead>
   <tbody>${colls.map(c=>`<tr><td>${_d(c.date)}</td><td style="font-weight:600;color:#00B050">${_n(c.amount)}</td><td>${c.paymentType||'—'}</td><td style="font-family:monospace">${c.chequeNo||'—'}</td><td>${c.description||'—'}</td></tr>`).join('')}</tbody>
