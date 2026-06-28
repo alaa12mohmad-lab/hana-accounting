@@ -1711,7 +1711,7 @@ function renderLoaderCollections(loaders){
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            ${remaining>0?`<button class="btn btn-primary btn-sm" onclick="openJrnModal('تحصيل',null,{party:'${clientName}',partyType:'عميل',description:'تحصيل أعمال لودر ${ld.name}'})">💵 تسجيل تحصيل</button>`:''}
+            ${remaining>0?`<button class="btn btn-primary btn-sm" onclick="openJrnModal('يدوي',null,{creditCode:'1010',creditName:'ذمم العملاء',party:'${clientName}',partyType:'عميل',description:'تحصيل أعمال لودر ${ld.name}'})">💵 تسجيل قيد تحصيل</button>`:''}
           </div>
         </div>
 
