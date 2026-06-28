@@ -1159,7 +1159,7 @@ function renderLoaderStatements(loaders){
           <input type="date" value="${to}" onchange="window._LDS_TO=this.value;nav('loaders')"></div>
         <button class="btn btn-gray btn-sm" onclick="window._LDS_FROM='';window._LDS_TO='';nav('loaders')">✕</button>
         ${from&&to&&ld?`<button class="btn btn-primary btn-sm" onclick="openLoaderStmtApprove(${selId||'null'})">✅ اعتماد</button>`:''}
-        <button class="btn btn-gray btn-sm" onclick="printLoaderStatement(${selId||'null'})">🖨️ طباعة</button>
+        <button class="btn btn-gray btn-sm" onclick="openLoaderPrintOptions(${selId||'null'})">🖨️ طباعة مخصصة</button>
       </div>
     </div>
     ${ld&&from&&to?`
