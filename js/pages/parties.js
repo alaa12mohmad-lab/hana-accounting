@@ -303,17 +303,29 @@ function printCustStmt(){
     const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
     return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.description||'—'}</td><td style="text-align:center">${Number(j.hours)||0}</td><td style="text-align:center">${_n(j.pricePerHour||0)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#7c3aed">${_n(j.netClient||0)}</td></tr>`;
   }).join('')}</tbody>
-  <tfoot><tr><td colspan="6">الإجمالي</td><td style="color:#7c3aed;font-weight:700">${_n(totalHourlySell)}</td></tr></tfoot></table>`;
+  <tfoot><tr>
+    <td colspan="3">الإجمالي</td>
+    <td style="text-align:center;color:#7c3aed;font-weight:700">${hourlyJobs.reduce((s,j)=>s+(Number(j.hours)||0),0).toFixed(2).replace(/\.?0+$/,'')} س</td>
+    <td></td><td></td>
+    <td style="color:#7c3aed;font-weight:700">${_n(totalHourlySell)}</td>
+  </tr></tfoot></table>`;
 
   // قسم التحميل
   const loadingSection = loadingJobs.length===0 ? '' : `
   <p style="font-weight:700;margin:8px 0 5px;color:#0369a1">🚛 أعمال اللودر تحميل (${loadingJobs.length})</p>
-  <table><thead><tr><th>التاريخ</th><th>اللودر</th><th>نوع العمل</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+  <table><thead><tr><th>التاريخ</th><th>اللودر</th><th>نوع العمل</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">سعر/م³</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
   <tbody>${loadingJobs.map(j=>{
     const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
-    return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.workType||'تحميل'}</td><td style="text-align:center">${Number(j.trips)||0}</td><td style="text-align:center">${(Number(j.netM3)||0).toFixed(1)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#0369a1">${_n(j.netClient||0)}</td></tr>`;
+    const avgPrice = j.netM3>0 ? (j.grossAmount||j.netClient||0)/j.netM3 : (j.pricePerM3||0);
+    return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.workType||'تحميل'}</td><td style="text-align:center">${Number(j.trips)||0}</td><td style="text-align:center">${(Number(j.netM3)||0).toFixed(1)}</td><td style="text-align:center;font-weight:700">${_n(avgPrice)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#0369a1">${_n(j.netClient||0)}</td></tr>`;
   }).join('')}</tbody>
-  <tfoot><tr><td colspan="6">الإجمالي</td><td style="color:#0369a1;font-weight:700">${_n(totalLoadingSell)}</td></tr></tfoot></table>`;
+  <tfoot><tr>
+    <td colspan="3">الإجمالي</td>
+    <td style="text-align:center;color:#0369a1;font-weight:700">${loadingJobs.reduce((s,j)=>s+(Number(j.trips)||0),0)} نقلة</td>
+    <td style="text-align:center;color:#7c3aed;font-weight:700">${loadingJobs.reduce((s,j)=>s+(Number(j.netM3)||0),0).toFixed(1)} م³</td>
+    <td></td><td></td>
+    <td style="color:#0369a1;font-weight:700">${_n(totalLoadingSell)}</td>
+  </tr></tfoot></table>`;
 
   _pw('مستخلص عميل — '+_CS.party,`
   <div class="hdr">
