@@ -846,7 +846,7 @@ function renderLoaderLoading(loaders){
               <td>${badge(j.workType||'تحميل','blue')}</td>
               <td class="font-mono text-xs">${j.plateNo||'—'}</td>
               <td style="text-align:center;font-weight:700">${Number(j.trips)||0}</td>
-              <td style="text-align:center">${Number(j.cubicPerTrip)||0}</td>
+              <td style="text-align:center">${Math.round((Number(j.cubicPerTrip)||0)*100)/100}</td>
               <td style="text-align:center">${(Number(j.grossM3)||0).toFixed(1)}</td>
               <td style="text-align:center;color:#dc2626">${Number(j.discountM3)||0}</td>
               <td style="text-align:center;font-weight:700;color:#7c3aed">${(Number(j.netM3)||0).toFixed(1)}</td>
@@ -1042,7 +1042,7 @@ function saveLoaderLoading(jobId){
     discountClient: discC,
     netClient,
     // for backward compat
-    cubicPerTrip: netM3>0&&trips>0 ? netM3/trips : 0,
+    cubicPerTrip: netM3>0&&trips>0 ? Math.round((netM3/trips)*100)/100 : 0,
     pricePerM3: grossAmt>0&&netM3>0 ? grossAmt/netM3 : 0,
   };
 
@@ -1064,7 +1064,7 @@ function deleteLoaderLoading(id){
 
 function printLoaderLoading(){
   const loaders = DB.getAll('loaders');
-  const selId   = window._LDL_SEL;
+  const selId   = window._LDL_SEL||(loaders[0]?.id||null);
   const ld      = loaders.find(l=>l.id==selId);
   if(!ld){ toast('اختر لودراً أولاً','error'); return; }
   const from = window._LDL_FROM||'';
@@ -1111,7 +1111,7 @@ function printLoaderLoading(){
 function exportLoaderLoadingExcel(){
   if(typeof XLSX==='undefined'){ toast('مكتبة Excel غير محملة','error'); return; }
   const loaders = DB.getAll('loaders');
-  const selId   = window._LDL_SEL;
+  const selId   = window._LDL_SEL||(loaders[0]?.id||null);
   const ld      = loaders.find(l=>l.id==selId);
   if(!ld){ toast('اختر لودراً أولاً','error'); return; }
   const from = window._LDL_FROM||'';
@@ -1485,7 +1485,9 @@ function saveLoaderHourly(jobId){
 function deleteLoaderHourly(id){confirmDelete('حذف هذه اليومية؟',()=>{DB.remove('loaderHours',id);toast('تم الحذف');nav('loaders');});}
 
 function printLoaderHourly(){
-  const ld=DB.getAll('loaders').find(l=>l.id==window._LDH_SEL);
+  const _ldrs=DB.getAll('loaders');
+  const _hSel=window._LDH_SEL||(_ldrs[0]?.id||null);
+  const ld=_ldrs.find(l=>l.id==_hSel);
   if(!ld){toast('اختر لودراً أولاً','error');return;}
   const from=window._LDH_FROM||'',to=window._LDH_TO||'';
   const jobs=DB.getAll('loaderHours').filter(j=>j.loaderId===window._LDH_SEL&&(!from||j.date>=from)&&(!to||j.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
@@ -1498,7 +1500,9 @@ function printLoaderHourly(){
 
 function exportLoaderHourlyExcel(){
   if(typeof XLSX==='undefined'){toast('مكتبة Excel غير محملة','error');return;}
-  const ld=DB.getAll('loaders').find(l=>l.id==window._LDH_SEL);
+  const _ldrs2=DB.getAll('loaders');
+  const _hSel2=window._LDH_SEL||(_ldrs2[0]?.id||null);
+  const ld=_ldrs2.find(l=>l.id==_hSel2);
   if(!ld){toast('اختر لودراً أولاً','error');return;}
   const from=window._LDH_FROM||'',to=window._LDH_TO||'';
   const jobs=DB.getAll('loaderHours').filter(j=>j.loaderId===window._LDH_SEL&&(!from||j.date>=from)&&(!to||j.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
