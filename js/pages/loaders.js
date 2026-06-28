@@ -1278,7 +1278,7 @@ function renderLoaderStatements(loaders){
     .sort((a,b)=>b.createdAt-a.createdAt);
 
   // Current period calc
-  let periodRevCubic=0, periodRevHourly=0, periodExp=0;
+  let periodRevCubic=0, periodRevHourly=0, periodRevLoading=0, periodExp=0;
   if(ld && from && to){
     DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي'&&sk.date>=from&&sk.date<=to).forEach(sk=>{
       (sk.lines||[]).forEach(ln=>{
@@ -1290,12 +1290,15 @@ function renderLoaderStatements(loaders){
     DB.getAll('loaderHours').filter(j=>j.loaderId===selId&&j.date>=from&&j.date<=to).forEach(j=>{
       periodRevHourly += Number(j.netClient)||0;
     });
+    DB.getAll('loaderLoading').filter(j=>j.loaderId===selId&&j.date>=from&&j.date<=to).forEach(j=>{
+      periodRevLoading += Number(j.netClient)||0;
+    });
     DB.getAll('journal').filter(j=>
       j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح' &&
       (j.date||'')>=from && (j.date||'')<=to
     ).forEach(j=>{ periodExp += Number(j.amount||j.debitAmount)||0; });
   }
-  const periodGrand  = periodRevCubic + periodRevHourly;
+  const periodGrand  = periodRevCubic + periodRevHourly + periodRevLoading;
   const periodProfit = periodGrand - periodExp;
   const partners     = ld?.partners||[];
   const companyPct   = 100 - partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
@@ -1337,10 +1340,11 @@ function renderLoaderStatements(loaders){
           <div style="font-size:24px;font-weight:700;color:${periodProfit>=0?'#86efac':'#fca5a5'}">${curr(periodProfit)}</div>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
         ${[
           ['إيراد الخامات','📦',curr(periodRevCubic)],
           ['إيراد الساعات','⏱️',curr(periodRevHourly)],
+          ['إيراد التحميل','🚛',curr(periodRevLoading)],
           ['إجمالي الإيراد','💰',curr(periodGrand)],
           ['المصاريف','💸',curr(periodExp)],
         ].map(([l,ic,v])=>`
@@ -1387,7 +1391,7 @@ function renderLoaderStatements(loaders){
         ? '<div class="tbl-empty">لا توجد مستخلصات معتمدة بعد</div>'
         : `<div class="tbl-wrap"><table>
           <thead><tr>
-            <th>#</th><th>الفترة</th><th>إيراد خامات</th><th>إيراد ساعات</th>
+            <th>#</th><th>الفترة</th><th>إيراد خامات</th><th>إيراد ساعات</th><th>إيراد تحميل</th>
             <th>المصاريف</th><th>صافي الربح</th><th>تاريخ الاعتماد</th><th>إجراء</th>
           </tr></thead>
           <tbody>
@@ -1396,6 +1400,7 @@ function renderLoaderStatements(loaders){
               <td class="text-xs">${fmtDate(s.from)} — ${fmtDate(s.to)}</td>
               <td class="tabular">${curr(s.revCubic||0)}</td>
               <td class="tabular">${curr(s.revHourly||0)}</td>
+              <td class="tabular">${curr(s.revLoading||0)}</td>
               <td class="tabular text-red">${curr(s.expenses||0)}</td>
               <td class="tabular font-bold ${(s.netProfit||0)>=0?'text-brand':'text-red'}">${curr(s.netProfit||0)}</td>
               <td class="text-xs text-gray">${fmtDate(s.createdAt)}</td>
@@ -1432,7 +1437,7 @@ function openLoaderStmtApprove(loaderId){
     (j.date||'')>=from && (j.date||'')<=to
   ).forEach(j=>{ expenses += Number(j.amount||j.debitAmount)||0; });
 
-  const netProfit = revCubic + revHourly - expenses;
+  const netProfit = revCubic + revHourly + revLoading - expenses;
   const partners  = ld.partners||[];
   const companyPct= 100 - partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
 
@@ -1447,10 +1452,12 @@ function openLoaderStmtApprove(loaderId){
       <span>📋</span>
       <div>الفترة: <strong>${fmtDate(from)}</strong> — <strong>${fmtDate(to)}</strong></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
       <div class="card-sm text-center"><div class="text-xs text-gray">إيراد الخامات</div><div class="font-bold text-brand">${curr(revCubic)}</div></div>
       <div class="card-sm text-center"><div class="text-xs text-gray">إيراد الساعات</div><div class="font-bold text-brand">${curr(revHourly)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray">إيراد التحميل</div><div class="font-bold text-brand">${curr(revLoading)}</div></div>
       <div class="card-sm text-center"><div class="text-xs text-gray">المصاريف</div><div class="font-bold text-red">${curr(expenses)}</div></div>
+      <div class="card-sm text-center"><div class="text-xs text-gray">إجمالي الإيراد</div><div class="font-bold text-brand">${curr(revCubic+revHourly+revLoading)}</div></div>
       <div class="card-sm text-center"><div class="text-xs text-gray">صافي الربح</div><div class="font-bold" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${curr(netProfit)}</div></div>
     </div>
     <div class="section-title mb6">توزيع الأرباح</div>
@@ -1460,16 +1467,16 @@ function openLoaderStmtApprove(loaderId){
       <textarea id="stmt-notes" rows="2" placeholder="ملاحظات اختيارية"></textarea>
     </div>`,
     `<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
-     <button class="btn btn-primary" onclick="saveLoaderStatement(${loaderId},${JSON.stringify(from)},${JSON.stringify(to)},${revCubic},${revHourly},${expenses},${netProfit})">✅ اعتماد وأرشفة</button>`,
+     <button class="btn btn-primary" onclick="saveLoaderStatement(${loaderId},${JSON.stringify(from)},${JSON.stringify(to)},${revCubic},${revHourly},${revLoading},${expenses},${netProfit})">✅ اعتماد وأرشفة</button>`,
     'modal-lg'
   );
 }
 
-function saveLoaderStatement(loaderId, from, to, revCubic, revHourly, expenses, netProfit){
+function saveLoaderStatement(loaderId, from, to, revCubic, revHourly, revLoading, expenses, netProfit){
   const notes = document.getElementById('stmt-notes')?.value||'';
   DB.insert('loaderStatements',{
     loaderId, from, to,
-    revCubic, revHourly,
+    revCubic, revHourly, revLoading,
     expenses, netProfit,
     notes,
     createdAt: Date.now(),
@@ -1548,6 +1555,7 @@ function printLoaderStatement(loaderId){
     <div class="kpi">
       <div class="kpi-box"><div class="kpi-label">إيراد الخامات</div><div class="kpi-val" style="color:#16a34a">${_n(revCubic)}</div></div>
       <div class="kpi-box"><div class="kpi-label">إيراد الساعات</div><div class="kpi-val" style="color:#7c3aed">${_n(revHourly)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">إيراد التحميل</div><div class="kpi-val" style="color:#0369a1">${_n(revLoading)}</div></div>
       <div class="kpi-box"><div class="kpi-label">المصاريف</div><div class="kpi-val" style="color:#dc2626">${_n(expenses)}</div></div>
       <div class="kpi-box"><div class="kpi-label">صافي الربح</div><div class="kpi-val" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${_n(netProfit)}</div></div>
     </div>
@@ -1557,6 +1565,9 @@ function printLoaderStatement(loaderId){
     ${hourlyRows.length?`<div class="section">⏱️ إيراد الساعات</div>
     <table><thead><tr><th>التاريخ</th><th>العميل</th><th>البيان</th><th>الساعات</th><th>سعر/ساعة</th><th>صافي الإيراد</th></tr></thead>
     <tbody>${hourlyRows.join('')}</tbody><tfoot><tr><td colspan="5">الإجمالي</td><td>${_n(revHourly)}</td></tr></tfoot></table>`:''}
+    ${loadingRows.length?`<div class="section">🚛 إيراد التحميل</div>
+    <table><thead><tr><th>التاريخ</th><th>العميل</th><th>نوع العمل</th><th>نقلات</th><th>م³ صافي</th><th>سعر/م³</th><th>صافي الإيراد</th></tr></thead>
+    <tbody>${loadingRows.join('')}</tbody><tfoot><tr><td colspan="6">الإجمالي</td><td>${_n(revLoading)}</td></tr></tfoot></table>`:''}
     ${expRows.length?`<div class="section">💸 المصاريف</div>
     <table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th></tr></thead>
     <tbody>${expRows.join('')}</tbody><tfoot><tr><td colspan="3">الإجمالي</td><td>${_n(expenses)}</td></tr></tfoot></table>`:''}
