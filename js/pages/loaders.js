@@ -1490,7 +1490,7 @@ function printLoaderHourly(){
   const ld=_ldrs.find(l=>l.id==_hSel);
   if(!ld){toast('اختر لودراً أولاً','error');return;}
   const from=window._LDH_FROM||'',to=window._LDH_TO||'';
-  const jobs=DB.getAll('loaderHours').filter(j=>j.loaderId===window._LDH_SEL&&(!from||j.date>=from)&&(!to||j.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
+  const jobs=DB.getAll('loaderHours').filter(j=>j.loaderId==_hSel&&(!from||j.date>=from)&&(!to||j.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
   const _n=n=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(Number(n)||0)+' ج.م';
   const rows=jobs.map((j,i)=>`<tr><td>${i+1}</td><td>${j.date}</td><td>${j.client||'—'}</td><td>${j.description||'—'}</td><td>${j.hours}</td><td>${_n(j.pricePerHour)}</td><td>${_n(j.grossAmount)}</td><td>${_n(j.discountClient)}</td><td>${_n(j.netClient)}</td></tr>`).join('');
   const w=window.open('','_blank');
@@ -1505,7 +1505,7 @@ function exportLoaderHourlyExcel(){
   const ld=_ldrs2.find(l=>l.id==_hSel2);
   if(!ld){toast('اختر لودراً أولاً','error');return;}
   const from=window._LDH_FROM||'',to=window._LDH_TO||'';
-  const jobs=DB.getAll('loaderHours').filter(j=>j.loaderId===window._LDH_SEL&&(!from||j.date>=from)&&(!to||j.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
+  const jobs=DB.getAll('loaderHours').filter(j=>j.loaderId==_hSel2&&(!from||j.date>=from)&&(!to||j.date<=to)).sort((a,b)=>a.date.localeCompare(b.date));
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([
     [DB.getCompany().name||'','','ساعات اللودر: '+ld.name,'','','','','',''],
