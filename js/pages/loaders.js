@@ -28,24 +28,28 @@ function getLoaderCumulativeProfit(ld){
 
 // ── Helper: total profit already disbursed to a specific partner for a loader ──
 function getLoaderPartnerDisbursed(loaderId, partnerName){
+  // جلب كود حساب الشريك من إعدادات اللودر
+  const ld = DB.getAll('loaders').find(l=>l.id===loaderId);
+  const pt = (ld?.partners||[]).find(p=>p.partnerName===partnerName);
+  const accountCode = pt?.accountCode||'';
+
   let total = 0;
 
-  // 1. صرف أرباح مباشر مرتبط باللودر
+  // 1. صرف أرباح مرتبط بالشريك مباشرة (party=شريك)
   DB.getAll('journal').filter(j=>
     j.entryType==='يدوي' && j.loaderId===loaderId &&
     j.loaderExpType==='توزيع أرباح' &&
-    j.party===partnerName && j.partyType==='شريك' &&
-    j.debitCode==='3001'
+    j.party===partnerName && j.partyType==='شريك'
   ).forEach(j=>{ total += Number(j.debitAmount)||0; });
 
-  // 2. الشريك أخذ من عميل — قيد يدوي مدين 6001/3001 دائن 1010
-  DB.getAll('journal').filter(j=>{
-    if(j.entryType!=='يدوي') return false;
-    if(j.creditCode!=='1010') return false;
-    if(j.debitCode!=='6001' && j.debitCode!=='3001') return false;
-    return (j.debitName===partnerName) ||
-           (j.party===partnerName && j.partyType==='شريك');
-  }).forEach(j=>{ total += Number(j.debitAmount)||Number(j.creditAmount)||0; });
+  // 2. مسحوبات من حساب الشريك الشخصي (debitCode = كود حسابه في دليل الحسابات)
+  if(accountCode){
+    DB.getAll('journal').filter(j=>
+      j.entryType==='يدوي' &&
+      j.debitCode===accountCode &&
+      j.creditCode==='1010'
+    ).forEach(j=>{ total += Number(j.debitAmount)||0; });
+  }
 
   return total;
 }
@@ -582,7 +586,7 @@ function openLoaderModal(id){
     const el = document.getElementById('ld-partners');
     if(!el) return;
     el.innerHTML = window._LDPartners.map((pt,i)=>`
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:5px">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:5px">
         <select onchange="window._LDPartners[${i}].partnerName=this.value" style="font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-family:inherit">
           <option value="">اختر شريك</option>
           ${partners.map(p=>`<option ${pt.partnerName===p.name?'selected':''}>${p.name}</option>`).join('')}
@@ -593,6 +597,10 @@ function openLoaderModal(id){
         <input type="number" min="0" step="100" value="${pt.paidAmount||''}" placeholder="مدفوع ج.م"
           oninput="window._LDPartners[${i}].paidAmount=Number(this.value)"
           style="font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-family:inherit">
+        <input type="text" value="${pt.accountCode||''}" placeholder="كود حسابه (مثال: 3002)"
+          oninput="window._LDPartners[${i}].accountCode=this.value.trim()"
+          style="font-size:11px;padding:4px 6px;border:1px solid #1a5276;border-radius:5px;font-family:inherit;font-family:monospace"
+          title="كود حساب المسحوبات في دليل الحسابات">
         <button onclick="window._LDPartners.splice(${i},1);rPartners()" style="background:#fee2e2;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;color:#dc2626">✕</button>
       </div>`).join('')||'<div class="text-xs text-gray">الشركة تمتلك 100%</div>';
   };
@@ -626,6 +634,13 @@ function openLoaderModal(id){
     <div style="font-size:11px;color:#64748b;margin-bottom:8px;padding:6px 10px;background:#f1f5f9;border-radius:6px">
       حدد نسبة ملكية كل شريك والمبلغ الذي دفعه فعلياً من حصته
     </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:6px;padding:0 2px;margin-bottom:4px">
+      <span style="font-size:10px;color:#64748b">الشريك</span>
+      <span style="font-size:10px;color:#64748b">% ملكية</span>
+      <span style="font-size:10px;color:#64748b">مدفوع ج.م</span>
+      <span style="font-size:10px;color:#1a5276;font-weight:700">كود الحساب</span>
+      <span></span>
+    </div>
     <div id="ld-partners"></div>
     <button onclick="window._LDPartners.push({partnerName:'',ownershipPct:0,paidAmount:0});window._rLDPartners()" class="btn btn-gray btn-sm mt4">+ شريك</button>
   `;
@@ -651,7 +666,7 @@ function saveLoader(id){
     purchasePrice:   Number(document.getElementById('ld-price')?.value)||0,
     usefulLifeMonths:Number(document.getElementById('ld-life')?.value)||60,
     prices:          window._LDPrices.filter(p=>p.material&&p.pricePerM3),
-    partners:        window._LDPartners.filter(p=>p.partnerName&&p.ownershipPct),
+    partners:        window._LDPartners.filter(p=>p.partnerName&&p.ownershipPct).map(p=>({...p,accountCode:p.accountCode||''})),
   };
 
   if(id) DB.update('loaders',id,data);
