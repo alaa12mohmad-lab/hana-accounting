@@ -1089,22 +1089,71 @@ function printLoaderLoading(){
     <td>${_n(j.pricePerM3)}</td><td>${_n(j.discountClient)}</td><td>${_n(j.netClient)}</td>
   </tr>`).join('');
 
+  const totGross = jobs.reduce((s,j)=>s+(Number(j.grossAmount)||0),0);
+  const totDisc  = jobs.reduce((s,j)=>s+(Number(j.discountClient)||0),0);
   const co = DB.getCompany();
   const w  = window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
-    <style>*{font-family:Tahoma,sans-serif;font-size:10px;direction:rtl}body{padding:12px}
-    h3{color:#1F4E78;font-size:13px}table{width:100%;border-collapse:collapse}
-    th{background:#1F4E78;color:#fff;padding:5px}td{padding:4px;border-bottom:1px solid #eee}
-    tfoot tr{background:#fefce8;font-weight:700}@media print{@page{margin:9mm}}</style>
-    </head><body>
-    <h3>${co.name||'شركة الهنا للنقل'} — أعمال التحميل: ${ld.name}</h3>
-    <p style="color:#555;font-size:9px">الفترة: ${from||'البداية'} — ${to||'اليوم'}</p>
-    <table><thead><tr><th>#</th><th>التاريخ</th><th>العميل</th><th>نوع العمل</th><th>السيارة</th>
-      <th>نقلات</th><th>م³ صافي</th><th>سعر/م³</th><th>خصم عميل</th><th>صافي الإيراد</th>
-    </tr></thead><tbody>${rows}</tbody>
-    <tfoot><tr><td colspan="5">الإجمالي</td><td>${totTrips}</td><td>${totNetM3.toFixed(1)}</td>
-      <td></td><td></td><td>${_n(totNet)}</td></tr></tfoot></table>
-    <script>setTimeout(()=>window.print(),500)<\/script></body></html>`);
+    <style>
+      *{font-family:Tahoma,sans-serif;font-size:10px;direction:rtl}
+      body{padding:14px}
+      .hdr{border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start}
+      .co{font-size:14px;font-weight:700;color:#1F4E78}
+      .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+      .kpi-box{border:1px solid #e2e8f0;border-radius:6px;padding:8px;text-align:center}
+      .kpi-label{font-size:9px;color:#64748b;margin-bottom:2px}
+      .kpi-val{font-size:12px;font-weight:700}
+      table{width:100%;border-collapse:collapse}
+      th{background:#0369a1;color:#fff;padding:6px 5px;text-align:right}
+      td{padding:4px 5px;border-bottom:1px solid #eee}
+      tfoot td{background:#fefce8;font-weight:700}
+      .footer{margin-top:10px;border-top:1px solid #e2e8f0;padding-top:6px;display:flex;justify-content:space-between;font-size:9px;color:#94a3b8}
+      @media print{@page{margin:9mm;size:A4}body{padding:0}}
+    </style></head><body>
+    <div class="hdr">
+      <div>
+        <div class="co">${co.name||'شركة الهنا للنقل'}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:2px">تقرير أعمال التحميل: ${ld.name}</div>
+        <div style="font-size:9px;color:#94a3b8;margin-top:2px">
+          الفترة: ${from?_d(from):'البداية'} — ${to?_d(to):'اليوم'} | 
+          تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}
+        </div>
+      </div>
+      <div style="text-align:center;background:#0369a1;color:#fff;border-radius:8px;padding:8px 16px">
+        <div style="font-size:9px;opacity:.8">صافي الإيراد</div>
+        <div style="font-size:18px;font-weight:700">${_n(totNet)}</div>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-box"><div class="kpi-label">إجمالي النقلات</div><div class="kpi-val" style="color:#1d4ed8">${totTrips} نقلة</div></div>
+      <div class="kpi-box"><div class="kpi-label">م³ صافي</div><div class="kpi-val" style="color:#7c3aed">${totNetM3.toFixed(1)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">خصم العملاء</div><div class="kpi-val" style="color:#d97706">${_n(totDisc)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">صافي الإيراد</div><div class="kpi-val" style="color:#16a34a">${_n(totNet)}</div></div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>التاريخ</th><th>العميل</th><th>نوع العمل</th><th>السيارة</th>
+        <th style="text-align:center">نقلات</th>
+        <th style="text-align:center">م³ صافي</th>
+        <th style="text-align:center">سعر/م³</th>
+        <th style="text-align:center">خصم عميل</th>
+        <th style="text-align:center">صافي الإيراد</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="5">الإجمالي</td>
+        <td style="text-align:center;color:#1d4ed8">${totTrips}</td>
+        <td style="text-align:center;color:#7c3aed">${totNetM3.toFixed(1)}</td>
+        <td></td>
+        <td style="text-align:center;color:#d97706">${_n(totDisc)}</td>
+        <td style="text-align:center;color:#16a34a">${_n(totNet)}</td>
+      </tr></tfoot>
+    </table>
+    <div class="footer">
+      <span>${co.name||'شركة الهنا للنقل'}</span>
+      <span>${new Date().toLocaleDateString('ar-EG')}</span>
+    </div>
+    <script>setTimeout(()=>window.print(),600)<\/script></body></html>`);
   w.document.close();
 }
 
