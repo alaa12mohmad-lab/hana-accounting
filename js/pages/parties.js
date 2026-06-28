@@ -262,7 +262,26 @@ function printCustStmt(){
   const lastStmt=getLastStatement(_CS.party,'customer');
   const opening=lastStmt?Number(lastStmt.closingBalance)||0:Number(cs?.openingBalance)||0;
   const fd=new Date(_CS.from),td=new Date(_CS.to);
-  const sarkis=DB.getAll('sarkis').filter(sk=>{const d=new Date(sk.date);return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);});
+
+  const sarkis=DB.getAll('sarkis').filter(sk=>{
+    const d=new Date(sk.date);
+    return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);
+  });
+
+  // أعمال الساعات
+  const hourlyJobs=DB.getAll('loaderHours').filter(j=>{
+    const d=new Date(j.date);
+    return j.client===_CS.party&&d>=fd&&d<=td;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+  const totalHourlySell=hourlyJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+
+  // أعمال التحميل
+  const loadingJobs=DB.getAll('loaderLoading').filter(j=>{
+    const d=new Date(j.date);
+    return j.client===_CS.party&&d>=fd&&d<=td;
+  }).sort((a,b)=>a.date.localeCompare(b.date));
+  const totalLoadingSell=loadingJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+
   const colls=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
     if(!(d>=fd&&d<=td)) return false;
@@ -270,18 +289,52 @@ function printCustStmt(){
     if(j.entryType==='يدوي'&&j.party===_CS.party&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
     return false;
   }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.creditAmount)||0,paymentType:'قيد يدوي'}:j);
-  const totalSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
+
+  const totalSarkisSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
+  const totalSell=totalSarkisSell+totalHourlySell+totalLoadingSell;
   const totalColl=colls.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const balance=opening+totalSell-totalColl;
-  _pw('مستخلص عميل — '+_CS.party,`<div class="hdr"><div><div class="co">شركة الهنا للنقل</div><div class="co-sub">مستخلص حساب عميل</div><div class="co-sub">الفترة: ${_d(_CS.from)} — ${_d(_CS.to)}</div></div><div style="font-size:14px;font-weight:700;color:#1F4E78">${_CS.party}</div></div>
-  <div class="kpis" style="margin-bottom:9px"><div class="kc"><div class="kl">الرصيد الافتتاحي</div><div class="kv">${_n(opening)}</div></div><div class="kc"><div class="kl">إجمالي المبيعات</div><div class="kv">${_n(totalSell)}</div></div><div class="kc green"><div class="kl">إجمالي التحصيلات</div><div class="kv">${_n(totalColl)}</div></div><div class="kc ${balance>0?'red':'green'}"><div class="kl">الرصيد المستحق</div><div class="kv">${_n(balance)}</div></div></div>
-  <p style="font-weight:700;margin-bottom:5px">الحوافظ (${sarkis.length})</p>
+
+  // قسم الساعات
+  const hourlySection = hourlyJobs.length===0 ? '' : `
+  <p style="font-weight:700;margin:8px 0 5px;color:#7c3aed">⏱️ أعمال اللودر بالساعات (${hourlyJobs.length})</p>
+  <table><thead><tr><th>التاريخ</th><th>اللودر</th><th>البيان</th><th style="text-align:center">الساعات</th><th style="text-align:center">سعر/ساعة</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+  <tbody>${hourlyJobs.map(j=>{
+    const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
+    return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.description||'—'}</td><td style="text-align:center">${Number(j.hours)||0}</td><td style="text-align:center">${_n(j.pricePerHour||0)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#7c3aed">${_n(j.netClient||0)}</td></tr>`;
+  }).join('')}</tbody>
+  <tfoot><tr><td colspan="6">الإجمالي</td><td style="color:#7c3aed;font-weight:700">${_n(totalHourlySell)}</td></tr></tfoot></table>`;
+
+  // قسم التحميل
+  const loadingSection = loadingJobs.length===0 ? '' : `
+  <p style="font-weight:700;margin:8px 0 5px;color:#0369a1">🚛 أعمال اللودر تحميل (${loadingJobs.length})</p>
+  <table><thead><tr><th>التاريخ</th><th>اللودر</th><th>نوع العمل</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+  <tbody>${loadingJobs.map(j=>{
+    const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
+    return `<tr><td>${_d(j.date)}</td><td>${ld?.name||'—'}</td><td>${j.workType||'تحميل'}</td><td style="text-align:center">${Number(j.trips)||0}</td><td style="text-align:center">${(Number(j.netM3)||0).toFixed(1)}</td><td style="text-align:center;color:#d97706">${_n(j.discountClient||0)}</td><td style="font-weight:600;color:#0369a1">${_n(j.netClient||0)}</td></tr>`;
+  }).join('')}</tbody>
+  <tfoot><tr><td colspan="6">الإجمالي</td><td style="color:#0369a1;font-weight:700">${_n(totalLoadingSell)}</td></tr></tfoot></table>`;
+
+  _pw('مستخلص عميل — '+_CS.party,`
+  <div class="hdr">
+    <div><div class="co">شركة الهنا للنقل</div><div class="co-sub">مستخلص حساب عميل</div><div class="co-sub">الفترة: ${_d(_CS.from)} — ${_d(_CS.to)}</div></div>
+    <div style="font-size:14px;font-weight:700;color:#1F4E78">${_CS.party}</div>
+  </div>
+  <div class="kpis" style="margin-bottom:9px">
+    <div class="kc"><div class="kl">الرصيد الافتتاحي</div><div class="kv">${_n(opening)}</div></div>
+    <div class="kc"><div class="kl">إجمالي المبيعات</div><div class="kv">${_n(totalSell)}</div></div>
+    <div class="kc green"><div class="kl">إجمالي التحصيلات</div><div class="kv">${_n(totalColl)}</div></div>
+    <div class="kc ${balance>0?'red':'green'}"><div class="kl">الرصيد المستحق</div><div class="kv">${_n(balance)}</div></div>
+  </div>
+  <p style="font-weight:700;margin-bottom:5px">🚛 الحوافظ (${sarkis.length})</p>
   <table><thead><tr><th>#</th><th>التاريخ</th><th>الخامة</th><th>م³</th><th>إجمالي البيع</th><th>المورد</th></tr></thead>
-  <tbody>${sarkis.map(sk=>`<tr><td style="font-family:monospace">#${sk.id}</td><td>${_d(sk.date)}</td><td>${sk.material}</td><td style="text-align:center">${(Number(sk.totalNet)||0).toFixed(1)}</td><td style="font-weight:600;color:#1F4E78">${_n(sk.totalSell)}</td><td>${sk.supplier}</td></tr>`).join('')}</tbody>
-  <tfoot><tr><td colspan="3">الإجمالي</td><td style="text-align:center">${sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0).toFixed(1)}</td><td>${_n(totalSell)}</td><td></td></tr></tfoot></table>
-  <p style="font-weight:700;margin:8px 0 5px">التحصيلات من اليومية (${colls.length})</p>
+  <tbody>${sarkis.map(sk=>`<tr><td style="font-family:monospace">#${sk.id}</td><td>${_d(sk.date)}</td><td>${sk.material}</td><td style="text-align:center">${(Number(sk.totalNet)||0).toFixed(1)}</td><td style="font-weight:600;color:#1F4E78">${_n(sk.totalSell)}</td><td>${sk.supplier}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:#94a3b8">لا توجد حوافظ</td></tr>'}</tbody>
+  <tfoot><tr><td colspan="3">الإجمالي</td><td style="text-align:center">${sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0).toFixed(1)}</td><td>${_n(totalSarkisSell)}</td><td></td></tr></tfoot></table>
+  ${hourlySection}
+  ${loadingSection}
+  <p style="font-weight:700;margin:8px 0 5px">💵 التحصيلات من اليومية (${colls.length})</p>
   <table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البيان</th></tr></thead>
-  <tbody>${colls.map(c=>`<tr><td>${_d(c.date)}</td><td style="font-weight:600;color:#00B050">${_n(c.amount)}</td><td>${c.paymentType||'—'}</td><td style="font-family:monospace">${c.chequeNo||'—'}</td><td>${c.description||'—'}</td></tr>`).join('')}</tbody>
+  <tbody>${colls.map(c=>`<tr><td>${_d(c.date)}</td><td style="font-weight:600;color:#00B050">${_n(c.amount)}</td><td>${c.paymentType||'—'}</td><td style="font-family:monospace">${c.chequeNo||'—'}</td><td>${c.description||'—'}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:#94a3b8">لا توجد تحصيلات</td></tr>'}</tbody>
   <tfoot><tr><td colspan="1">الإجمالي</td><td style="color:#00B050">${_n(totalColl)}</td><td colspan="3"></td></tr></tfoot></table>
   <div class="stamps"><div class="stamp">المحاسب</div><div class="stamp">المدير</div><div class="stamp">العميل / المفوض</div></div>
   <div class="footer"><span>شركة الهنا للنقل</span><span>${_d(Date.now())}</span></div>`);
@@ -336,191 +389,6 @@ function printReport(){
   <table><thead><tr><th>العميل</th><th>عدد</th><th>م³</th><th>البيع</th><th>الربح</th><th>هامش%</th></tr></thead>
   <tbody>${entBD.map(e=>`<tr><td>${e.name}</td><td style="text-align:center">${e.count}</td><td style="text-align:center">${e.cubic.toFixed(1)}</td><td>${_n(e.sell)}</td><td style="font-weight:700;color:#00B050">${_n(e.profit)}</td><td style="text-align:center">${(e.margin*100).toFixed(1)}%</td></tr>`).join('')}</tbody></table>
   <div class="footer"><span>شركة الهنا للنقل — نظام إدارة محاسبي</span><span>${_d(Date.now())}</span></div>`);
-}
-
-
-// ── مستخلص اللودر للعميل — اختيار الأقسام ───────────────────────
-function openLoaderPrintOptions(loaderId){
-  const ld = DB.getAll('loaders').find(l=>l.id==loaderId);
-  if(!ld){ toast('اختر لودراً أولاً','error'); return; }
-
-  openModal('🖨️ خيارات طباعة مستخلص اللودر', `
-    <div class="alert alert-blue mb12">
-      <span>ℹ️</span>
-      <div>اختر الأقسام التي تريد إظهارها في التقرير</div>
-    </div>
-    <div style="display:grid;gap:8px">
-      ${[
-        ['chk-cubic','📦 إيراد الخامات (الحوافظ)',true],
-        ['chk-hourly','⏱️ إيراد الساعات',true],
-        ['chk-loading','🚛 إيراد التحميل',true],
-        ['chk-expenses','💸 المصاريف',true],
-        ['chk-dist','💰 توزيع الأرباح على الشركاء',true],
-        ['chk-stamps','✍️ خانات التوقيع',true],
-      ].map(([id,label,checked])=>`
-        <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-radius:8px;cursor:pointer;border:1px solid #e2e8f0">
-          <input type="checkbox" id="${id}" ${checked?'checked':''} style="width:16px;height:16px;accent-color:#1d4ed8">
-          <span style="font-size:13px">${label}</span>
-        </label>`).join('')}
-    </div>
-    <div class="form-row fr2 mt12">
-      <div class="form-group">
-        <label style="font-size:11px">عنوان التقرير (اختياري)</label>
-        <input id="print-title" placeholder="مستخلص لودر ${ld.name}" value="مستخلص لودر ${ld.name}">
-      </div>
-      <div class="form-group">
-        <label style="font-size:11px">ملاحظة إضافية (تظهر في أسفل التقرير)</label>
-        <input id="print-note" placeholder="ملاحظة اختيارية">
-      </div>
-    </div>`,
-    `<button class="btn btn-gray" onclick="closeModal()">إلغاء</button>
-     <button class="btn btn-primary" onclick="printLoaderStatementCustom(${loaderId})">🖨️ طباعة</button>`,
-    'modal-md'
-  );
-}
-
-function printLoaderStatementCustom(loaderId){
-  const opts = {
-    cubic:    document.getElementById('chk-cubic')?.checked !== false,
-    hourly:   document.getElementById('chk-hourly')?.checked !== false,
-    loading:  document.getElementById('chk-loading')?.checked !== false,
-    expenses: document.getElementById('chk-expenses')?.checked !== false,
-    dist:     document.getElementById('chk-dist')?.checked !== false,
-    stamps:   document.getElementById('chk-stamps')?.checked !== false,
-    title:    document.getElementById('print-title')?.value || '',
-    note:     document.getElementById('print-note')?.value || '',
-  };
-  closeModal();
-  printLoaderStatementFull(loaderId, opts);
-}
-
-function printLoaderStatementFull(loaderId, opts){
-  opts = opts || {cubic:true,hourly:true,loading:true,expenses:true,dist:true,stamps:true,title:'',note:''};
-  const ld   = DB.getAll('loaders').find(l=>l.id==loaderId);
-  const from = window._LDS_FROM||'';
-  const to   = window._LDS_TO||'';
-  if(!ld){ toast('اختر لودراً أولاً','error'); return; }
-
-  let revCubic=0, revHourly=0, revLoading=0, expenses=0;
-  const cubicRows=[], hourlyRows=[], loadingRows=[], expRows=[];
-
-  DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to)).forEach(sk=>{
-    (sk.lines||[]).forEach(ln=>{
-      if(ln.loaderName!==ld.name) return;
-      const net=Number(ln.netSell||ln.netCubic)||0, price=getLoaderPrice(ld,sk.material), rev=net*price;
-      revCubic+=rev;
-      cubicRows.push(`<tr><td>${sk.date}</td><td>#${sk.id}</td><td>${sk.client}</td><td>${sk.material}</td><td style="text-align:center">${net.toFixed(1)}</td><td style="text-align:center">${price}</td><td style="text-align:left;font-weight:700">${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(rev)} ج.م</td></tr>`);
-    });
-  });
-
-  DB.getAll('loaderHours').filter(j=>j.loaderId===loaderId&&(!from||j.date>=from)&&(!to||j.date<=to)).forEach(j=>{
-    revHourly+=Number(j.netClient)||0;
-    hourlyRows.push(`<tr><td>${j.date}</td><td>${j.client}</td><td>${j.description||'—'}</td><td style="text-align:center">${j.hours}</td><td style="text-align:center">${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.pricePerHour||0)} ج.م</td><td style="text-align:left;font-weight:700">${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.netClient||0)} ج.م</td></tr>`);
-  });
-
-  DB.getAll('loaderLoading').filter(j=>j.loaderId===loaderId&&(!from||j.date>=from)&&(!to||j.date<=to)).forEach(j=>{
-    revLoading+=Number(j.netClient)||0;
-    const lines=j.lines||[{plateNo:j.plateNo||'—',trips:j.trips,netM3:j.netM3,pricePerM3:j.pricePerM3}];
-    lines.forEach((ln,li)=>{
-      loadingRows.push(`<tr>
-        ${li===0?`<td rowspan="${lines.length}">${j.date}</td><td rowspan="${lines.length}">${j.client}</td><td rowspan="${lines.length}">${j.workType||'تحميل'}</td>`:''}
-        <td style="text-align:center;font-family:monospace">${ln.plateNo||'—'}</td>
-        <td style="text-align:center">${Number(ln.trips)||0}</td>
-        <td style="text-align:center">${(Number(ln.netM3)||0).toFixed(1)}</td>
-        <td style="text-align:center">${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(ln.pricePerM3||0)}/م³</td>
-        ${li===0?`<td rowspan="${lines.length}" style="text-align:left;font-weight:700">${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.netClient||0)} ج.م</td>`:''}
-      </tr>`);
-    });
-  });
-
-  DB.getAll('journal').filter(j=>j.loaderId===ld.id&&j.loaderExpType!=='توزيع أرباح'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to)).forEach(j=>{
-    const amt=Number(j.amount||j.debitAmount)||0; expenses+=amt;
-    expRows.push(`<tr><td>${j.date}</td><td>${j.loaderExpType||'أخرى'}</td><td>${j.description||'—'}</td><td style="text-align:left;font-weight:700">${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(amt)} ج.م</td></tr>`);
-  });
-
-  const netProfit = revCubic + revHourly + revLoading - expenses;
-  const co = DB.getCompany();
-  const _n = n=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(n)+' ج.م';
-  const partners = ld.partners||[];
-  const companyPct = 100-partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
-  const sharesHtml = [{partnerName:'الشركة',ownershipPct:companyPct},...partners].map(pt=>
-    `<tr><td>${pt.partnerName}</td><td style="text-align:center">${pt.ownershipPct}%</td><td style="font-weight:700;color:#1F4E78;text-align:left">${_n(netProfit*Number(pt.ownershipPct)/100)}</td></tr>`
-  ).join('');
-
-  const css=`*{font-family:Tahoma,sans-serif;direction:rtl;font-size:10px}body{padding:14px;color:#111}
-    h2{color:#1F4E78;font-size:15px;margin:0 0 3px}.hdr{border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start}
-    .kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:14px}
-    .kpi-box{border:1px solid #e2e8f0;border-radius:6px;padding:8px;text-align:center}
-    .kpi-label{font-size:9px;color:#64748b;margin-bottom:2px}.kpi-val{font-size:12px;font-weight:700}
-    table{width:100%;border-collapse:collapse;margin-bottom:14px}
-    th{background:#1F4E78;color:#fff;padding:5px 7px;text-align:right;font-size:10px}
-    td{padding:4px 7px;border-bottom:1px solid #f1f5f9;font-size:10px}
-    tfoot td{background:#fefce8;font-weight:700}
-    .section{font-size:12px;font-weight:700;color:#1F4E78;margin:12px 0 5px;padding-right:8px;border-right:3px solid #1F4E78}
-    .stamps{display:flex;justify-content:space-around;margin-top:30px;padding-top:10px;border-top:1px dashed #ccc}
-    .stamp{text-align:center;width:140px;font-size:10px;color:#374151}
-    .stamp-line{border-top:1px solid #374151;margin-bottom:6px;height:30px}
-    .note{margin-top:10px;padding:8px;background:#fefce8;border:1px solid #fde047;border-radius:6px;font-size:9px}
-    .footer{margin-top:10px;border-top:1px solid #e2e8f0;padding-top:6px;display:flex;justify-content:space-between;font-size:9px;color:#94a3b8}
-    @media print{@page{margin:10mm;size:A4}body{padding:0}}`;
-
-  const w = window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${opts.title||'مستخلص لودر'}</title><style>${css}</style></head><body>
-    <div class="hdr">
-      <div>
-        <h2>${co.name||'شركة الهنا للنقل'}</h2>
-        <div style="font-size:10px;color:#64748b">${opts.title||'مستخلص لودر: '+ld.name}</div>
-        <div style="font-size:9px;color:#94a3b8;margin-top:2px">الفترة: ${from||'البداية'} — ${to||'اليوم'} | تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>
-      </div>
-      <div style="text-align:center;background:#1F4E78;color:#fff;border-radius:8px;padding:8px 16px">
-        <div style="font-size:9px;opacity:.8">صافي الربح</div>
-        <div style="font-size:18px;font-weight:700;color:${netProfit>=0?'#86efac':'#fca5a5'}">${_n(netProfit)}</div>
-      </div>
-    </div>
-
-    <div class="kpi">
-      <div class="kpi-box"><div class="kpi-label">إيراد الخامات</div><div class="kpi-val" style="color:#16a34a">${_n(revCubic)}</div></div>
-      <div class="kpi-box"><div class="kpi-label">إيراد الساعات</div><div class="kpi-val" style="color:#7c3aed">${_n(revHourly)}</div></div>
-      <div class="kpi-box"><div class="kpi-label">إيراد التحميل</div><div class="kpi-val" style="color:#0369a1">${_n(revLoading)}</div></div>
-      <div class="kpi-box"><div class="kpi-label">المصاريف</div><div class="kpi-val" style="color:#dc2626">${_n(expenses)}</div></div>
-      <div class="kpi-box"><div class="kpi-label">صافي الربح</div><div class="kpi-val" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${_n(netProfit)}</div></div>
-    </div>
-
-    ${opts.cubic && cubicRows.length?`<div class="section">📦 إيراد الخامات</div>
-    <table><thead><tr><th>التاريخ</th><th>حافظة</th><th>العميل</th><th>الخامة</th><th style="text-align:center">م³</th><th style="text-align:center">سعر/م³</th><th>الإيراد</th></tr></thead>
-    <tbody>${cubicRows.join('')}</tbody>
-    <tfoot><tr><td colspan="6">الإجمالي</td><td>${_n(revCubic)}</td></tr></tfoot></table>`:''}
-
-    ${opts.hourly && hourlyRows.length?`<div class="section">⏱️ إيراد الساعات</div>
-    <table><thead><tr><th>التاريخ</th><th>العميل</th><th>البيان</th><th style="text-align:center">الساعات</th><th style="text-align:center">سعر/ساعة</th><th>صافي الإيراد</th></tr></thead>
-    <tbody>${hourlyRows.join('')}</tbody>
-    <tfoot><tr><td colspan="5">الإجمالي</td><td>${_n(revHourly)}</td></tr></tfoot></table>`:''}
-
-    ${opts.loading && loadingRows.length?`<div class="section">🚛 إيراد التحميل</div>
-    <table><thead><tr><th>التاريخ</th><th>العميل</th><th>نوع العمل</th><th style="text-align:center">السيارة</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">سعر/م³</th><th>صافي الإيراد</th></tr></thead>
-    <tbody>${loadingRows.join('')}</tbody>
-    <tfoot><tr><td colspan="7">الإجمالي</td><td>${_n(revLoading)}</td></tr></tfoot></table>`:''}
-
-    ${opts.expenses && expRows.length?`<div class="section">💸 المصاريف</div>
-    <table><thead><tr><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th></tr></thead>
-    <tbody>${expRows.join('')}</tbody>
-    <tfoot><tr><td colspan="3">الإجمالي</td><td>${_n(expenses)}</td></tr></tfoot></table>`:''}
-
-    ${opts.dist?`<div class="section">💰 توزيع الأرباح</div>
-    <table><thead><tr><th>الشريك</th><th style="text-align:center">نسبة الملكية</th><th>حصته من الربح</th></tr></thead>
-    <tbody>${sharesHtml}</tbody></table>`:''}
-
-    ${opts.note?`<div class="note">📝 ملاحظة: ${opts.note}</div>`:''}
-
-    ${opts.stamps?`<div class="stamps">
-      <div class="stamp"><div class="stamp-line"></div>المحاسب</div>
-      <div class="stamp"><div class="stamp-line"></div>المدير</div>
-      <div class="stamp"><div class="stamp-line"></div>العميل / المفوض</div>
-    </div>`:''}
-
-    <div class="footer"><span>${co.name||'شركة الهنا للنقل'}</span><span>${new Date().toLocaleDateString('ar-EG')}</span></div>
-    <script>setTimeout(()=>window.print(),600)<\/script></body></html>`);
-  w.document.close();
 }
 
 // ═══════════════════════════════════════════════════════
