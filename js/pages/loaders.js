@@ -584,8 +584,9 @@ function openLoaderModal(id){
   const ld = id ? DB.getById('loaders',id) : null;
   const v  = (k,d='')=>ld?.[k]??d;
 
-  window._LDPrices   = ld ? JSON.parse(JSON.stringify(ld.prices||[])) : [];
-  window._LDPartners = ld ? JSON.parse(JSON.stringify(ld.partners||[])) : [];
+  window._LDPrices    = ld ? JSON.parse(JSON.stringify(ld.prices||[])) : [];
+  window._LDPartners  = ld ? JSON.parse(JSON.stringify(ld.partners||[])) : [];
+  window._LDLPrices   = ld ? JSON.parse(JSON.stringify(ld.loadingPrices||[])) : [];
 
   const rPrices = ()=>{
     const el = document.getElementById('ld-prices');
@@ -624,6 +625,28 @@ function openLoaderModal(id){
   };
   window._rLDPartners = rPartners;
 
+  const rLDLPrices = ()=>{
+    const el = document.getElementById('ld-loading-prices');
+    if(!el) return;
+    const customers = DB.getAll('customers');
+    const wtypes = [...new Set(['تحميل','قطع','تشوين','نقل ونفايات','تسوية',...JSON.parse(localStorage.getItem('_ldLoadTypes')||'[]')])];
+    el.innerHTML = window._LDLPrices.map((p,i)=>`
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:5px">
+        <select onchange="window._LDLPrices[${i}].client=this.value" style="font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-family:inherit">
+          <option value="">اختر عميل</option>
+          ${customers.map(c=>`<option ${p.client===c.name?'selected':''}>${c.name}</option>`).join('')}
+        </select>
+        <select onchange="window._LDLPrices[${i}].workType=this.value" style="font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-family:inherit">
+          ${wtypes.map(t=>`<option ${p.workType===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+        <input type="number" min="0" step="0.01" value="${p.pricePerM3||''}" placeholder="سعر/م³"
+          oninput="window._LDLPrices[${i}].pricePerM3=Number(this.value)"
+          style="font-size:11px;padding:4px 6px;border:1px solid #1a5276;border-radius:5px;font-family:inherit">
+        <button onclick="window._LDLPrices.splice(${i},1);window._rLDLPrices()" style="background:#fee2e2;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;color:#dc2626">✕</button>
+      </div>`).join('')||'<div class="text-xs text-gray">لا توجد أسعار محددة</div>';
+  };
+  window._rLDLPrices = rLDLPrices;
+
   const body = `
     <div class="form-row fr3">
       <div class="form-group"><label>اسم اللودر <span class="req">*</span></label><input id="ld-name" value="${v('name')}"></div>
@@ -648,6 +671,13 @@ function openLoaderModal(id){
     <div id="ld-prices"></div>
     <button onclick="window._LDPrices.push({material:'',pricePerM3:0});window._rLDPrices()" class="btn btn-gray btn-sm mt4">+ خامة</button>
 
+    <div class="section-title mt12 mb8">🚛 أسعار التحميل لكل عميل ونوع عمل</div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:8px;padding:6px 10px;background:#eff6ff;border-radius:6px">
+      حدد سعر/م³ لكل عميل ونوع عمل — يُجلب تلقائياً عند إضافة سطر تحميل
+    </div>
+    <div id="ld-loading-prices"></div>
+    <button onclick="window._LDLPrices.push({client:'',workType:'تحميل',pricePerM3:0});window._rLDLPrices()" class="btn btn-gray btn-sm mt4">+ سعر</button>
+
     <div class="section-title mt12 mb8">👥 الشركاء في اللودر</div>
     <div style="font-size:11px;color:#64748b;margin-bottom:8px;padding:6px 10px;background:#f1f5f9;border-radius:6px">
       حدد نسبة ملكية كل شريك والمبلغ الذي دفعه فعلياً من حصته
@@ -661,7 +691,7 @@ function openLoaderModal(id){
     <button class="btn btn-primary" onclick="saveLoader(${id||'null'})">💾 حفظ اللودر</button>`;
 
   openModal((id?'تعديل':'إضافة')+' لودر', body, footer, 'modal-xl');
-  setTimeout(()=>{ rPrices(); rPartners(); }, 80);
+  setTimeout(()=>{ rPrices(); rPartners(); rLDLPrices(); }, 80);
 }
 
 // ── Save loader ───────────────────────────────────────────────────
@@ -677,6 +707,7 @@ function saveLoader(id){
     purchasePrice:   Number(document.getElementById('ld-price')?.value)||0,
     usefulLifeMonths:Number(document.getElementById('ld-life')?.value)||60,
     prices:          window._LDPrices.filter(p=>p.material&&p.pricePerM3),
+    loadingPrices:   window._LDLPrices.filter(p=>p.client&&p.workType&&p.pricePerM3),
     partners:        window._LDPartners.filter(p=>p.partnerName&&p.ownershipPct),
   };
 
@@ -888,123 +919,170 @@ function renderLoaderLoading(loaders){
   </div>`;
 }
 
-// ── Modal ─────────────────────────────────────────────────────────
+// ── Helper: get loading price for client+workType ─────────────────
+function getLoaderLoadingPrice(ld, clientName, workType){
+  const p = (ld.loadingPrices||[]).find(p=>p.client===clientName&&p.workType===workType);
+  return p ? Number(p.pricePerM3)||0 : 0;
+}
+
+// ── Modal: multi-line loading job (like sarkis) ───────────────────
 function openLoaderLoadingModal(jobId, loaderId){
   const loaders   = DB.getAll('loaders');
   const customers = DB.getAll('customers');
   const job = jobId ? DB.getById('loaderLoading', jobId) : null;
   const v   = (k,d='')=>job?.[k]??d;
+  const ld  = loaders.find(l=>l.id==(job?.loaderId||loaderId))||loaders[0];
 
   const ldOpts = loaders.map(l=>
     `<option value="${l.id}" ${l.id==(job?.loaderId||loaderId)?'selected':''}>${l.name}</option>`
   ).join('');
 
-  // Work types list (default + custom saved)
   const defaultTypes = ['تحميل','قطع','تشوين','نقل ونفايات','تسوية'];
   const customTypes  = JSON.parse(localStorage.getItem('_ldLoadTypes')||'[]');
-  const allTypes     = [...new Set([...defaultTypes,...customTypes,(job?.workType||'')])].filter(Boolean);
+  const allTypes     = [...new Set([...defaultTypes,...customTypes])].filter(Boolean);
+
+  // Init lines
+  window._LLLines = job?.lines ? JSON.parse(JSON.stringify(job.lines)) : [{plateNo:'',trips:0,cubicPerTrip:0,discountM3:0,netM3:0,pricePerM3:0,grossAmount:0}];
+
+  const rLines = ()=>{
+    const el = document.getElementById('ll-lines-body');
+    if(!el) return;
+    const client = document.getElementById('ll-client')?.value||'';
+    const wtype  = document.getElementById('ll-wtype')?.value||'';
+    const ldId   = Number(document.getElementById('ll-loader')?.value)||null;
+    const ldObj  = DB.getAll('loaders').find(l=>l.id===ldId);
+    const autoPrice = getLoaderLoadingPrice(ldObj||{}, client, wtype);
+
+    el.innerHTML = window._LLLines.map((ln,i)=>`
+      <tr>
+        <td><input type="text" value="${ln.plateNo||''}" placeholder="اللوحة"
+          oninput="window._LLLines[${i}].plateNo=this.value"
+          style="width:90px;font-size:10px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit"></td>
+        <td><input type="number" min="0" value="${ln.trips||0}"
+          oninput="window._LLLines[${i}].trips=Number(this.value);llLineRecalc(${i})"
+          style="width:60px;text-align:center;font-size:10px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit"></td>
+        <td><input type="number" min="0" step="0.01" value="${ln.cubicPerTrip||0}"
+          oninput="window._LLLines[${i}].cubicPerTrip=Number(this.value);llLineRecalc(${i})"
+          style="width:65px;text-align:center;font-size:10px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:4px;font-family:inherit"></td>
+        <td style="text-align:center;font-weight:700;color:#7c3aed;font-size:10px" id="ll-gm3-${i}">${((ln.trips||0)*(ln.cubicPerTrip||0)).toFixed(1)}</td>
+        <td><input type="number" min="0" step="0.01" value="${ln.discountM3||0}"
+          oninput="window._LLLines[${i}].discountM3=Number(this.value);llLineRecalc(${i})"
+          style="width:55px;text-align:center;font-size:10px;padding:3px 5px;border:1px solid #dc2626;border-radius:4px;font-family:inherit;color:#dc2626"></td>
+        <td style="text-align:center;font-weight:700;color:#1d4ed8;font-size:10px" id="ll-nm3-${i}">${(ln.netM3||0).toFixed(1)}</td>
+        <td><input type="number" min="0" step="0.01" value="${ln.pricePerM3||autoPrice}"
+          oninput="window._LLLines[${i}].pricePerM3=Number(this.value);llLineRecalc(${i})"
+          style="width:65px;text-align:center;font-size:10px;padding:3px 5px;border:1px solid #1a5276;border-radius:4px;font-family:inherit"></td>
+        <td style="text-align:center;font-weight:700;color:#16a34a;font-size:10px" id="ll-amt-${i}">${curr(ln.grossAmount||0)}</td>
+        <td><button onclick="window._LLLines.splice(${i},1);window._rLLLines()" 
+          style="background:#fee2e2;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;color:#dc2626;font-size:11px">✕</button></td>
+      </tr>`).join('');
+    llUpdateTotals();
+  };
+  window._rLLLines = rLines;
 
   const body = `
     <div class="form-row fr2 mb8">
       <div class="form-group"><label>اللودر <span class="req">*</span></label>
-        <select id="ll-loader">${ldOpts}</select>
-      </div>
+        <select id="ll-loader" onchange="window._rLLLines()">${ldOpts}</select></div>
       <div class="form-group"><label>التاريخ <span class="req">*</span></label>
-        <input type="date" id="ll-date" value="${v('date',todayStr())}">
-      </div>
+        <input type="date" id="ll-date" value="${v('date',todayStr())}"></div>
     </div>
     <div class="form-row fr2 mb8">
       <div class="form-group"><label>العميل <span class="req">*</span></label>
-        <select id="ll-client">
+        <select id="ll-client" onchange="window._rLLLines()">
           <option value="">— اختر عميل —</option>
           ${customers.map(c=>`<option ${v('client')===c.name?'selected':''}>${c.name}</option>`).join('')}
-        </select>
-      </div>
+        </select></div>
       <div class="form-group"><label>نوع العمل <span class="req">*</span></label>
         <div style="display:flex;gap:6px">
-          <select id="ll-wtype" style="flex:1" onchange="if(this.value==='__new__')this.value=''">
+          <select id="ll-wtype" style="flex:1" onchange="window._rLLLines()">
             ${allTypes.map(t=>`<option ${v('workType')===t?'selected':''}>${t}</option>`).join('')}
-            <option value="__new__">+ إضافة نوع جديد</option>
           </select>
-          <input id="ll-wtype-new" placeholder="نوع جديد" style="width:110px;font-size:11px;display:none">
-          <button onclick="(function(){var n=document.getElementById('ll-wtype-new');n.style.display=n.style.display==='none'?'block':'none'})()" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:4px 8px;cursor:pointer">+</button>
+          <input id="ll-wtype-new" placeholder="نوع جديد..." style="width:110px;font-size:11px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:5px;font-family:inherit">
+          <button onclick="(function(){var n=document.getElementById('ll-wtype-new').value.trim();if(!n)return;var s=document.getElementById('ll-wtype');var o=document.createElement('option');o.text=n;o.value=n;s.add(o);s.value=n;var saved=JSON.parse(localStorage.getItem('_ldLoadTypes')||'[]');if(!saved.includes(n)){saved.push(n);localStorage.setItem('_ldLoadTypes',JSON.stringify(saved));}document.getElementById('ll-wtype-new').value='';window._rLLLines();})()" 
+            style="background:#1d4ed8;color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-family:inherit">+ إضافة</button>
         </div>
       </div>
     </div>
     <div class="form-row fr2 mb8">
-      <div class="form-group"><label>رقم السيارة</label>
-        <input id="ll-plate" value="${v('plateNo')}" placeholder="رقم لوحة السيارة">
-      </div>
       <div class="form-group"><label>البيان</label>
-        <input id="ll-desc" value="${v('description')}" placeholder="وصف العمل">
+        <input id="ll-desc" value="${v('description')}" placeholder="وصف العمل"></div>
+      <div class="form-group"><label>خصم إجمالي على العميل (ج.م)</label>
+        <input type="number" id="ll-disc-client" min="0" value="${v('discountClient',0)}" oninput="llUpdateTotals()"></div>
+    </div>
+
+    <!-- Lines table -->
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:10px">
+      <div style="background:#1F4E78;color:#fff;padding:6px 10px;font-size:11px;font-weight:700">📦 سطور العمل</div>
+      <div class="tbl-wrap" style="margin:0"><table style="font-size:10px">
+        <thead><tr style="background:#1a3a5c;color:#fff">
+          <th style="padding:5px 6px">السيارة/اللوحة</th>
+          <th style="padding:5px 6px;text-align:center">نقلات</th>
+          <th style="padding:5px 6px;text-align:center">م³/نقلة</th>
+          <th style="padding:5px 6px;text-align:center">إجمالي م³</th>
+          <th style="padding:5px 6px;text-align:center;color:#fca5a5">خصم م³</th>
+          <th style="padding:5px 6px;text-align:center;color:#93c5fd">صافي م³</th>
+          <th style="padding:5px 6px;text-align:center">سعر/م³</th>
+          <th style="padding:5px 6px;text-align:center;color:#86efac">الإجمالي</th>
+          <th style="padding:5px 6px"></th>
+        </tr></thead>
+        <tbody id="ll-lines-body"></tbody>
+        <tfoot>
+          <tr style="background:#fefce8;font-weight:700;font-size:10px">
+            <td style="padding:5px 8px">المجموع</td>
+            <td style="text-align:center" id="ll-tot-trips">0</td>
+            <td></td>
+            <td style="text-align:center;color:#7c3aed" id="ll-tot-gm3">0.0</td>
+            <td></td>
+            <td style="text-align:center;color:#1d4ed8" id="ll-tot-nm3">0.0</td>
+            <td></td>
+            <td style="text-align:center;color:#16a34a" id="ll-tot-amt">0.00 ج.م</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table></div>
+      <div style="padding:8px 10px">
+        <button onclick="window._LLLines.push({plateNo:'',trips:0,cubicPerTrip:0,discountM3:0,netM3:0,pricePerM3:0,grossAmount:0});window._rLLLines()"
+          style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;padding:4px 12px;cursor:pointer;font-size:11px;font-family:inherit;color:#1d4ed8">+ إضافة سطر</button>
       </div>
     </div>
 
-    <!-- Quantities -->
-    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">
-      <div class="section-title mb8" style="font-size:11px;margin:0 0 8px">📦 الكميات</div>
-      <div class="form-row fr4">
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px">عدد النقلات <span class="req">*</span></label>
-          <input type="number" id="ll-trips" min="0" value="${v('trips',0)}" oninput="llRecalc()">
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px">م³/نقلة</label>
-          <input type="number" id="ll-cubic" min="0" step="0.01" value="${v('cubicPerTrip',0)}" oninput="llRecalc()">
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px">إجمالي م³</label>
-          <div id="ll-gross-m3" style="font-weight:700;color:#7c3aed;padding:8px 0;font-size:13px">${(Number(v('grossM3',0))).toFixed(1)}</div>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px;color:#dc2626">خصم م³</label>
-          <input type="number" id="ll-disc-m3" min="0" step="0.01" value="${v('discountM3',0)}" oninput="llRecalc()">
-        </div>
-      </div>
-      <div class="form-row fr3 mt8">
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px">صافي م³</label>
-          <div id="ll-net-m3" style="font-weight:700;color:#1d4ed8;padding:8px 0;font-size:14px">${(Number(v('netM3',0))).toFixed(1)}</div>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px">سعر/م³ (ج.م) <span class="req">*</span></label>
-          <input type="number" id="ll-price" min="0" step="0.01" value="${v('pricePerM3',0)}" oninput="llRecalc()">
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label style="font-size:10px">الإجمالي</label>
-          <div id="ll-gross-amt" style="font-weight:700;color:#16a34a;padding:8px 0;font-size:14px">${curr(v('grossAmount',0))}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Discount -->
-    <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:10px">
-      <div class="form-group" style="margin-bottom:8px">
-        <label style="color:#d97706">خصم على العميل (ج.م) — اختياري</label>
-        <input type="number" id="ll-disc-client" min="0" value="${v('discountClient',0)}" oninput="llRecalc()">
-      </div>
-      <div style="font-size:14px;font-weight:700">
-        صافي الإيراد: <span id="ll-net-client" style="color:#16a34a">${curr(v('netClient',0))}</span>
-      </div>
+    <!-- Net total -->
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;text-align:center">
+      <div style="font-size:11px;color:#64748b;margin-bottom:4px">صافي الإيراد بعد خصم العميل</div>
+      <div id="ll-net-total" style="font-size:20px;font-weight:700;color:#16a34a">0.00 ج.م</div>
     </div>
 
     <script>
-    function llRecalc(){
-      var trips  = Number(document.getElementById('ll-trips')?.value)||0;
-      var cubic  = Number(document.getElementById('ll-cubic')?.value)||0;
-      var discM3 = Number(document.getElementById('ll-disc-m3')?.value)||0;
-      var price  = Number(document.getElementById('ll-price')?.value)||0;
-      var discC  = Number(document.getElementById('ll-disc-client')?.value)||0;
-      var grossM3 = trips * cubic;
-      var netM3   = Math.max(0, grossM3 - discM3);
-      var gross   = netM3 * price;
-      var net     = Math.max(0, gross - discC);
-      document.getElementById('ll-gross-m3').textContent = grossM3.toFixed(1);
-      document.getElementById('ll-net-m3').textContent   = netM3.toFixed(1);
-      document.getElementById('ll-gross-amt').textContent = curr(gross);
-      document.getElementById('ll-net-client').textContent = curr(net);
+    function llLineRecalc(i){
+      var ln=window._LLLines[i];
+      var gm3=(ln.trips||0)*(ln.cubicPerTrip||0);
+      var nm3=Math.max(0,gm3-(ln.discountM3||0));
+      var amt=nm3*(ln.pricePerM3||0);
+      ln.grossM3=gm3; ln.netM3=nm3; ln.grossAmount=amt;
+      var gEl=document.getElementById('ll-gm3-'+i);
+      var nEl=document.getElementById('ll-nm3-'+i);
+      var aEl=document.getElementById('ll-amt-'+i);
+      if(gEl) gEl.textContent=gm3.toFixed(1);
+      if(nEl) nEl.textContent=nm3.toFixed(1);
+      if(aEl) aEl.textContent=curr(amt);
+      llUpdateTotals();
     }
-    setTimeout(llRecalc, 80);
+    function llUpdateTotals(){
+      var lines=window._LLLines||[];
+      var totTrips=lines.reduce(function(s,l){return s+(Number(l.trips)||0);},0);
+      var totGM3=lines.reduce(function(s,l){return s+(Number(l.grossM3)||0);},0);
+      var totNM3=lines.reduce(function(s,l){return s+(Number(l.netM3)||0);},0);
+      var totAmt=lines.reduce(function(s,l){return s+(Number(l.grossAmount)||0);},0);
+      var discC=Number(document.getElementById('ll-disc-client')?.value)||0;
+      var net=Math.max(0,totAmt-discC);
+      var t=document.getElementById('ll-tot-trips');if(t)t.textContent=totTrips;
+      var g=document.getElementById('ll-tot-gm3');if(g)g.textContent=totGM3.toFixed(1);
+      var n=document.getElementById('ll-tot-nm3');if(n)n.textContent=totNM3.toFixed(1);
+      var a=document.getElementById('ll-tot-amt');if(a)a.textContent=curr(totAmt);
+      var nt=document.getElementById('ll-net-total');if(nt)nt.textContent=curr(net);
+    }
+    setTimeout(function(){window._rLLLines();},100);
     <\/script>`;
 
   const foot = `
@@ -1018,41 +1096,30 @@ function saveLoaderLoading(jobId){
   const loaderId = Number(document.getElementById('ll-loader')?.value)||null;
   const date     = document.getElementById('ll-date')?.value;
   const client   = document.getElementById('ll-client')?.value;
-  const trips    = Number(document.getElementById('ll-trips')?.value)||0;
-  const price    = Number(document.getElementById('ll-price')?.value)||0;
+  const lines    = (window._LLLines||[]).filter(l=>l.trips>0);
 
-  if(!loaderId||!date||!client||!trips||!price) return toast('أكمل الحقول المطلوبة','error');
+  if(!loaderId||!date||!client||!lines.length) return toast('أكمل الحقول المطلوبة (لازم سطر واحد على الأقل)','error');
 
-  // Work type — check if new type entered
   let workType = document.getElementById('ll-wtype')?.value||'تحميل';
-  const newType = document.getElementById('ll-wtype-new')?.value?.trim();
-  if(newType){
-    workType = newType;
-    // Save custom type
-    const saved = JSON.parse(localStorage.getItem('_ldLoadTypes')||'[]');
-    if(!saved.includes(newType)){ saved.push(newType); localStorage.setItem('_ldLoadTypes', JSON.stringify(saved)); }
-  }
 
-  const cubic    = Number(document.getElementById('ll-cubic')?.value)||0;
-  const discM3   = Number(document.getElementById('ll-disc-m3')?.value)||0;
-  const grossM3  = trips * cubic;
-  const netM3    = Math.max(0, grossM3 - discM3);
-  const gross    = netM3 * price;
-  const discC    = Number(document.getElementById('ll-disc-client')?.value)||0;
-  const net      = Math.max(0, gross - discC);
+  const trips     = lines.reduce((s,l)=>s+(Number(l.trips)||0),0);
+  const grossM3   = lines.reduce((s,l)=>s+(Number(l.grossM3)||0),0);
+  const netM3     = lines.reduce((s,l)=>s+(Number(l.netM3)||0),0);
+  const grossAmt  = lines.reduce((s,l)=>s+(Number(l.grossAmount)||0),0);
+  const discC     = Number(document.getElementById('ll-disc-client')?.value)||0;
+  const netClient = Math.max(0, grossAmt - discC);
 
   const data = {
-    loaderId, date, client,
-    workType,
-    plateNo:        document.getElementById('ll-plate')?.value?.trim()||'',
-    description:    document.getElementById('ll-desc')?.value?.trim()||'',
-    trips, cubicPerTrip:cubic,
-    discountM3:     discM3,
-    grossM3, netM3,
-    pricePerM3:     price,
-    grossAmount:    gross,
+    loaderId, date, client, workType,
+    description: document.getElementById('ll-desc')?.value?.trim()||'',
+    lines,
+    trips, grossM3, netM3,
+    grossAmount:    grossAmt,
     discountClient: discC,
-    netClient:      net,
+    netClient,
+    // for backward compat
+    cubicPerTrip: netM3>0&&trips>0 ? netM3/trips : 0,
+    pricePerM3: grossAmt>0&&netM3>0 ? grossAmt/netM3 : 0,
   };
 
   if(jobId) DB.update('loaderLoading', jobId, data);
