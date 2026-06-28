@@ -225,14 +225,30 @@ function renderRunningBal(){
           && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
       }).forEach(function(j){
         if(j.entryType==='تحصيل'){
-          // تحصيل مباشر
           txns.push({date:j.date,type:'تحصيل',desc:j.description||'تحصيل نقدي',
             debit:0, credit:Number(j.amount)||0});
         } else if(j.entryType==='يدوي' && j.creditCode==='1010'){
-          // قيد يدوي يضع ذمم العملاء دائن = تحصيل
           txns.push({date:j.date,type:'تحصيل يدوي',desc:j.description||'قيد يدوي',
             debit:0, credit:Number(j.creditAmount)||0});
         }
+      });
+      // أعمال الساعات للعميل
+      DB.getAll('loaderHours').filter(function(j){
+        return j.client===selEntity && (!from||j.date>=from) && (!to||j.date<=to);
+      }).forEach(function(j){
+        var ld=DB.getAll('loaders').find(function(l){return l.id===j.loaderId;});
+        txns.push({date:j.date,type:'ساعات لودر',
+          desc:(ld?ld.name+' — ':'')+' '+(j.description||'عمل ساعات')+' ('+( Number(j.hours)||0)+' س)',
+          debit:Number(j.netClient)||0, credit:0});
+      });
+      // أعمال التحميل للعميل
+      DB.getAll('loaderLoading').filter(function(j){
+        return j.client===selEntity && (!from||j.date>=from) && (!to||j.date<=to);
+      }).forEach(function(j){
+        var ld=DB.getAll('loaders').find(function(l){return l.id===j.loaderId;});
+        txns.push({date:j.date,type:'تحميل لودر',
+          desc:(ld?ld.name+' — ':'')+( j.workType||'تحميل')+' ('+( Number(j.trips)||0)+' نقلة)',
+          debit:Number(j.netClient)||0, credit:0});
       });
       txns.sort(function(a,b){ return a.date.localeCompare(b.date); });
       rows = txns.map(function(t){ runBal+=t.debit-t.credit; return Object.assign({},t,{balance:runBal}); });
