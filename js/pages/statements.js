@@ -74,6 +74,20 @@ function renderCustStmt(){
     return sk.client===_CS.party&&sk.status!=='ملغي'&&d>=fd&&d<=td&&(_CS.mat==='الكل'||sk.material===_CS.mat);
   }).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
 
+  // أعمال الساعات للعميل
+  const hourlyJobs=DB.getAll('loaderHours').filter(j=>{
+    const d=new Date(j.date);
+    return j.client===_CS.party&&d>=fd&&d<=td;
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  const totalHourlySell=hourlyJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+
+  // أعمال التحميل للعميل
+  const loadingJobs=DB.getAll('loaderLoading').filter(j=>{
+    const d=new Date(j.date);
+    return j.client===_CS.party&&d>=fd&&d<=td;
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  const totalLoadingSell=loadingJobs.reduce((s,j)=>s+(Number(j.netClient)||0),0);
+
   const colls=DB.getAll('journal').filter(j=>{
     const d=new Date(j.date);
     if(!(d>=fd&&d<=td)) return false;
@@ -85,7 +99,8 @@ function renderCustStmt(){
     return j;
   });
 
-  const totalSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
+  const totalSarkisSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
+  const totalSell=totalSarkisSell+totalHourlySell+totalLoadingSell;
   const totalColl=colls.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const totalNet=sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0);
   const balance=opening+totalSell-totalColl;
@@ -204,6 +219,59 @@ function renderCustStmt(){
           </table>
         </div>`).join('')||`<div class="tbl-empty">لا توجد حوافظ في هذه الفترة</div>`}
     </div>
+
+    ${hourlyJobs.length>0?`
+    <div class="card mb12">
+      <div class="flex-between mb8">
+        <div class="section-title" style="margin-bottom:0">⏱️ أعمال اللودر بالساعات (${hourlyJobs.length})</div>
+        <strong class="text-brand tabular">${curr(totalHourlySell)}</strong>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>التاريخ</th><th>اللودر</th><th>البيان</th><th style="text-align:center">الساعات</th><th style="text-align:center">سعر/ساعة</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+        <tbody>
+          ${hourlyJobs.map(j=>{
+            const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
+            return `<tr>
+              <td>${fmtDate(j.date)}</td>
+              <td class="text-gray text-xs">${ld?.name||'—'}</td>
+              <td class="text-xs">${j.description||'—'}</td>
+              <td style="text-align:center">${Number(j.hours)||0}</td>
+              <td style="text-align:center">${curr(j.pricePerHour||0)}</td>
+              <td style="text-align:center;color:#d97706">${curr(j.discountClient||0)}</td>
+              <td class="tabular font-bold text-brand">${curr(j.netClient||0)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="6" style="font-weight:700">الإجمالي</td><td class="tabular text-brand font-bold">${curr(totalHourlySell)}</td></tr></tfoot>
+      </table></div>
+    </div>`:''}
+
+    ${loadingJobs.length>0?`
+    <div class="card mb12">
+      <div class="flex-between mb8">
+        <div class="section-title" style="margin-bottom:0">🚛 أعمال اللودر تحميل (${loadingJobs.length})</div>
+        <strong class="text-brand tabular">${curr(totalLoadingSell)}</strong>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>التاريخ</th><th>اللودر</th><th>نوع العمل</th><th>السيارة</th><th style="text-align:center">نقلات</th><th style="text-align:center">م³ صافي</th><th style="text-align:center">خصم</th><th>صافي الإيراد</th></tr></thead>
+        <tbody>
+          ${loadingJobs.map(j=>{
+            const ld=DB.getAll('loaders').find(l=>l.id===j.loaderId);
+            return `<tr>
+              <td>${fmtDate(j.date)}</td>
+              <td class="text-gray text-xs">${ld?.name||'—'}</td>
+              <td>${badge(j.workType||'تحميل','blue')}</td>
+              <td class="font-mono text-xs">${j.plateNo||'—'}</td>
+              <td style="text-align:center">${Number(j.trips)||0}</td>
+              <td style="text-align:center;font-weight:700">${(Number(j.netM3)||0).toFixed(1)}</td>
+              <td style="text-align:center;color:#d97706">${curr(j.discountClient||0)}</td>
+              <td class="tabular font-bold text-brand">${curr(j.netClient||0)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="7" style="font-weight:700">الإجمالي</td><td class="tabular text-brand font-bold">${curr(totalLoadingSell)}</td></tr></tfoot>
+      </table></div>
+    </div>`:''}
 
     <div class="card">
       <div class="flex-between mb8">
