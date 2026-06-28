@@ -28,12 +28,26 @@ function getLoaderCumulativeProfit(ld){
 
 // ── Helper: total profit already disbursed to a specific partner for a loader ──
 function getLoaderPartnerDisbursed(loaderId, partnerName){
-  return DB.getAll('journal').filter(j=>
+  let total = 0;
+
+  // 1. صرف أرباح مباشر مرتبط باللودر
+  DB.getAll('journal').filter(j=>
     j.entryType==='يدوي' && j.loaderId===loaderId &&
     j.loaderExpType==='توزيع أرباح' &&
     j.party===partnerName && j.partyType==='شريك' &&
     j.debitCode==='3001'
-  ).reduce((s,j)=>s+(Number(j.debitAmount)||0),0);
+  ).forEach(j=>{ total += Number(j.debitAmount)||0; });
+
+  // 2. الشريك أخذ من عميل — قيد يدوي مدين 6001/3001 دائن 1010
+  DB.getAll('journal').filter(j=>{
+    if(j.entryType!=='يدوي') return false;
+    if(j.creditCode!=='1010') return false;
+    if(j.debitCode!=='6001' && j.debitCode!=='3001') return false;
+    return (j.debitName===partnerName) ||
+           (j.party===partnerName && j.partyType==='شريك');
+  }).forEach(j=>{ total += Number(j.debitAmount)||Number(j.creditAmount)||0; });
+
+  return total;
 }
 
 // ── Open prefilled manual journal entry to disburse profit to a partner ──
