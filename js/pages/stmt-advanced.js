@@ -225,30 +225,14 @@ function renderRunningBal(){
           && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to);
       }).forEach(function(j){
         if(j.entryType==='تحصيل'){
+          // تحصيل مباشر
           txns.push({date:j.date,type:'تحصيل',desc:j.description||'تحصيل نقدي',
             debit:0, credit:Number(j.amount)||0});
         } else if(j.entryType==='يدوي' && j.creditCode==='1010'){
+          // قيد يدوي يضع ذمم العملاء دائن = تحصيل
           txns.push({date:j.date,type:'تحصيل يدوي',desc:j.description||'قيد يدوي',
             debit:0, credit:Number(j.creditAmount)||0});
         }
-      });
-      // أعمال الساعات للعميل
-      DB.getAll('loaderHours').filter(function(j){
-        return j.client===selEntity && (!from||j.date>=from) && (!to||j.date<=to);
-      }).forEach(function(j){
-        var ld=DB.getAll('loaders').find(function(l){return l.id===j.loaderId;});
-        txns.push({date:j.date,type:'ساعات لودر',
-          desc:(ld?ld.name+' — ':'')+' '+(j.description||'عمل ساعات')+' ('+( Number(j.hours)||0)+' س)',
-          debit:Number(j.netClient)||0, credit:0});
-      });
-      // أعمال التحميل للعميل
-      DB.getAll('loaderLoading').filter(function(j){
-        return j.client===selEntity && (!from||j.date>=from) && (!to||j.date<=to);
-      }).forEach(function(j){
-        var ld=DB.getAll('loaders').find(function(l){return l.id===j.loaderId;});
-        txns.push({date:j.date,type:'تحميل لودر',
-          desc:(ld?ld.name+' — ':'')+( j.workType||'تحميل')+' ('+( Number(j.trips)||0)+' نقلة)',
-          debit:Number(j.netClient)||0, credit:0});
       });
       txns.sort(function(a,b){ return a.date.localeCompare(b.date); });
       rows = txns.map(function(t){ runBal+=t.debit-t.credit; return Object.assign({},t,{balance:runBal}); });
@@ -598,6 +582,109 @@ function renderClientQty(){
             +'</tr>';
         }).join(''))
     +'</tbody></table></div>'
+    +'</div>'
+
+    // ── Hourly loader jobs section ──
+    +(function(){
+      var hJobs=DB.getAll('loaderHours').filter(function(j){
+        if(selClient&&j.client!==selClient) return false;
+        if(selFrom&&j.date<selFrom) return false;
+        if(selTo&&j.date>selTo) return false;
+        return true;
+      }).sort(function(a,b){return b.date.localeCompare(a.date);});
+      if(!hJobs.length) return '';
+      var totH=hJobs.reduce(function(s,j){return s+(Number(j.hours)||0);},0);
+      var totHRev=hJobs.reduce(function(s,j){return s+(Number(j.netClient)||0);},0);
+      return '<div class="card mt12">'
+        +'<div class="flex-between mb8">'
+        +'<div class="section-title" style="margin:0;color:#7c3aed">⏱️ أعمال الساعات ('+hJobs.length+' سجل)</div>'
+        +'<strong style="color:#7c3aed">'+curr(totHRev)+'</strong></div>'
+        +'<div class="tbl-wrap"><table style="font-size:10px">'
+        +'<thead><tr style="background:#7c3aed;color:#fff">'
+        +'<th>التاريخ</th><th>اللودر</th><th>العميل</th><th>البيان</th>'
+        +'<th style="text-align:center">الساعات</th><th style="text-align:center">سعر/ساعة</th>'
+        +'<th style="text-align:center">الإجمالي</th><th style="text-align:center">خصم</th>'
+        +'<th style="text-align:center">صافي الإيراد</th>'
+        +'</tr></thead><tbody>'
+        +hJobs.map(function(j){
+          var ld=DB.getAll('loaders').find(function(l){return l.id===j.loaderId;});
+          return '<tr>'
+            +'<td>'+fmtDate(j.date)+'</td>'
+            +'<td class="text-xs text-gray">'+(ld?ld.name:'—')+'</td>'
+            +'<td><strong>'+j.client+'</strong></td>'
+            +'<td class="text-xs">'+(j.description||'—')+'</td>'
+            +'<td style="text-align:center;font-weight:700">'+(Number(j.hours)||0)+'</td>'
+            +'<td style="text-align:center">'+curr(j.pricePerHour||0)+'</td>'
+            +'<td style="text-align:center;color:#1d4ed8">'+curr(j.grossAmount||0)+'</td>'
+            +'<td style="text-align:center;color:#d97706">'+curr(j.discountClient||0)+'</td>'
+            +'<td style="text-align:center;font-weight:700;color:#7c3aed">'+curr(j.netClient||0)+'</td>'
+            +'</tr>';
+        }).join('')
+        +'</tbody><tfoot><tr style="background:#ede9fe;font-weight:700">'
+        +'<td colspan="4">الإجمالي</td>'
+        +'<td style="text-align:center">'+totH.toFixed(1)+' س</td>'
+        +'<td colspan="3"></td>'
+        +'<td style="text-align:center;color:#7c3aed">'+curr(totHRev)+'</td>'
+        +'</tr></tfoot></table></div></div>';
+    })()
+
+    // ── Loading loader jobs section ──
+    +(function(){
+      var lJobs=DB.getAll('loaderLoading').filter(function(j){
+        if(selClient&&j.client!==selClient) return false;
+        if(selFrom&&j.date<selFrom) return false;
+        if(selTo&&j.date>selTo) return false;
+        return true;
+      }).sort(function(a,b){return b.date.localeCompare(a.date);});
+      if(!lJobs.length) return '';
+      var totLTrips=lJobs.reduce(function(s,j){return s+(Number(j.trips)||0);},0);
+      var totLM3=lJobs.reduce(function(s,j){return s+(Number(j.netM3)||0);},0);
+      var totLRev=lJobs.reduce(function(s,j){return s+(Number(j.netClient)||0);},0);
+      return '<div class="card mt12">'
+        +'<div class="flex-between mb8">'
+        +'<div class="section-title" style="margin:0;color:#0369a1">🚛 أعمال التحميل ('+lJobs.length+' سجل)</div>'
+        +'<strong style="color:#0369a1">'+curr(totLRev)+'</strong></div>'
+        +'<div class="tbl-wrap"><table style="font-size:10px">'
+        +'<thead><tr style="background:#0369a1;color:#fff">'
+        +'<th>التاريخ</th><th>اللودر</th><th>العميل</th><th>نوع العمل</th>'
+        +'<th style="text-align:center">السيارة</th><th style="text-align:center">نقلات</th>'
+        +'<th style="text-align:center">م³/نقلة</th><th style="text-align:center">إجمالي م³</th>'
+        +'<th style="text-align:center">خصم م³</th><th style="text-align:center">صافي م³</th>'
+        +'<th style="text-align:center">سعر/م³</th><th style="text-align:center">خصم عميل</th>'
+        +'<th style="text-align:center">صافي الإيراد</th>'
+        +'</tr></thead><tbody>'
+        +lJobs.map(function(j){
+          var ld=DB.getAll('loaders').find(function(l){return l.id===j.loaderId;});
+          var lines=j.lines||[{plateNo:j.plateNo||'—',trips:j.trips||0,cubicPerTrip:j.cubicPerTrip||0,grossM3:j.grossM3||0,discountM3:j.discountM3||0,netM3:j.netM3||0,pricePerM3:j.pricePerM3||0}];
+          return lines.map(function(ln,li){
+            return '<tr style="'+(li%2?'background:#f0f9ff':'')+'">'
+              +(li===0?'<td rowspan="'+lines.length+'">'+fmtDate(j.date)+'</td>'
+                +'<td rowspan="'+lines.length+'" class="text-xs text-gray">'+(ld?ld.name:'—')+'</td>'
+                +'<td rowspan="'+lines.length+'"><strong>'+j.client+'</strong></td>'
+                +'<td rowspan="'+lines.length+'">'+badge(j.workType||'تحميل','blue')+'</td>':'')
+              +'<td style="text-align:center;font-family:monospace;font-size:10px">'+(ln.plateNo||'—')+'</td>'
+              +'<td style="text-align:center;font-weight:700">'+(Number(ln.trips)||0)+'</td>'
+              +'<td style="text-align:center">'+(Number(ln.cubicPerTrip)||0)+'</td>'
+              +'<td style="text-align:center">'+(Number(ln.grossM3)||0).toFixed(1)+'</td>'
+              +'<td style="text-align:center;color:#dc2626">'+(Number(ln.discountM3)||0)+'</td>'
+              +'<td style="text-align:center;font-weight:700;color:#0369a1">'+(Number(ln.netM3)||0).toFixed(1)+'</td>'
+              +'<td style="text-align:center">'+curr(ln.pricePerM3||0)+'</td>'
+              +(li===0?'<td rowspan="'+lines.length+'" style="text-align:center;color:#d97706">'+curr(j.discountClient||0)+'</td>'
+                +'<td rowspan="'+lines.length+'" style="text-align:center;font-weight:700;color:#0369a1">'+curr(j.netClient||0)+'</td>':'')
+              +'</tr>';
+          }).join('');
+        }).join('')
+        +'</tbody><tfoot><tr style="background:#e0f2fe;font-weight:700">'
+        +'<td colspan="5">الإجمالي</td>'
+        +'<td style="text-align:center">'+totLTrips+'</td>'
+        +'<td colspan="3"></td>'
+        +'<td style="text-align:center;color:#0369a1">'+totLM3.toFixed(1)+' م³</td>'
+        +'<td colspan="1"></td>'
+        +'<td colspan="1"></td>'
+        +'<td style="text-align:center;color:#0369a1">'+curr(totLRev)+'</td>'
+        +'</tr></tfoot></table></div></div>';
+    })()
+
     +'</div>';
 }
 
