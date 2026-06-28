@@ -56,6 +56,7 @@ function renderLoaders(){
     ['hourly','⏱️ الساعات'],
     ['loading','🚛 التحميل'],
     ['report','📊 مركز الربح'],
+    ['collections','💵 التحصيلات'],
     ['statements','📋 المستخلصات'],
   ];
 
@@ -74,6 +75,8 @@ function renderLoaders(){
     content = typeof renderLoaderHourly==='function'?renderLoaderHourly(loaders):'';
   } else if(tab==='loading'){
     content = typeof renderLoaderLoading==='function'?renderLoaderLoading(loaders):'';
+  } else if(tab==='collections'){
+    content = renderLoaderCollections(loaders);
   } else if(tab==='statements'){
     content = typeof renderLoaderStatements==='function'?renderLoaderStatements(loaders):'';
   } else {
@@ -1512,4 +1515,324 @@ function llUpdateTotals(){
 function getLoaderLoadingPrice(ld,clientName,workType){
   const p=(ld.loadingPrices||[]).find(p=>p.client===clientName&&p.workType===workType);
   return p?Number(p.pricePerM3)||0:0;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LOADER COLLECTIONS — تحصيلات اللودر من العملاء
+// ═══════════════════════════════════════════════════════════════════
+function renderLoaderCollections(loaders){
+  const selId = window._LDC_SEL || (loaders[0]?.id||null);
+  const from  = window._LDC_FROM || '';
+  const to    = window._LDC_TO   || '';
+
+  const ldOpts = loaders.map(ld=>
+    `<option value="${ld.id}" ${ld.id==selId?'selected':''}>${ld.name}</option>`
+  ).join('');
+
+  const ld = loaders.find(l=>l.id==selId);
+
+  // Build client list that has work with this loader in period
+  let clientSales = {};
+  if(ld){
+    // Hourly jobs
+    DB.getAll('loaderHours').filter(j=>{
+      if(j.loaderId!==selId) return false;
+      if(from && j.date<from) return false;
+      if(to   && j.date>to)   return false;
+      return true;
+    }).forEach(j=>{
+      if(!clientSales[j.client]) clientSales[j.client]={hourly:0,loading:0};
+      clientSales[j.client].hourly += Number(j.netClient)||0;
+    });
+    // Loading jobs
+    DB.getAll('loaderLoading').filter(j=>{
+      if(j.loaderId!==selId) return false;
+      if(from && j.date<from) return false;
+      if(to   && j.date>to)   return false;
+      return true;
+    }).forEach(j=>{
+      if(!clientSales[j.client]) clientSales[j.client]={hourly:0,loading:0};
+      clientSales[j.client].loading += Number(j.netClient)||0;
+    });
+  }
+
+  const clients = Object.keys(clientSales);
+
+  // Get collections per client from journal
+  function getClientCollections(clientName){
+    return DB.getAll('journal').filter(j=>{
+      if(!from || !to) return false;
+      const d = j.date||'';
+      if(d<from || d>to) return false;
+      // تحصيل مباشر
+      if(j.entryType==='تحصيل' && j.party===clientName) return true;
+      // قيد يدوي يُدين ذمم العملاء (1010 دائن)
+      if(j.entryType==='يدوي' && j.party===clientName &&
+         j.partyType==='عميل' && j.creditCode==='1010') return true;
+      return false;
+    }).map(j=>{
+      const amount = j.entryType==='يدوي'
+        ? Number(j.creditAmount)||0
+        : Number(j.amount)||0;
+      // من أخذه — لو مدين حساب شريك (3001)
+      const takenBy = (j.entryType==='يدوي' && j.debitCode==='3001' && j.party===clientName)
+        ? (j.debitName||'شريك')
+        : (j.entryType==='يدوي' && j.debitCode==='3001')
+        ? (j.party||'شريك')
+        : '';
+      // تحقق من اسم الشريك من حقل party لو القيد من العميل للشريك
+      const partnerName = (j.entryType==='يدوي' && j.debitCode==='3001')
+        ? (j.debitName||'')
+        : '';
+      return {
+        date: j.date||'',
+        amount,
+        description: j.description||'—',
+        paymentType: j.paymentType||'—',
+        takenBy: partnerName || takenBy,
+        entryId: j.id,
+      };
+    }).sort((a,b)=>a.date.localeCompare(b.date));
+  }
+
+  // Totals
+  const totalSalesAll = clients.reduce((s,c)=>{
+    const cs = clientSales[c];
+    return s + cs.hourly + cs.loading;
+  },0);
+
+  const allCollections = {};
+  clients.forEach(c=>{ allCollections[c] = getClientCollections(c); });
+
+  const totalCollAll = clients.reduce((s,c)=>
+    s + allCollections[c].reduce((ss,col)=>ss+col.amount,0), 0);
+  const totalRemaining = totalSalesAll - totalCollAll;
+
+  return `<div>
+    <!-- Filter bar -->
+    <div class="card mb12" style="padding:10px 14px">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div class="form-group" style="margin:0;min-width:160px">
+          <label style="font-size:10px">اللودر</label>
+          <select onchange="window._LDC_SEL=Number(this.value)||null;nav('loaders')" style="width:100%">
+            ${ldOpts}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10px">من تاريخ</label>
+          <input type="date" value="${from}" onchange="window._LDC_FROM=this.value;nav('loaders')">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label style="font-size:10px">إلى تاريخ</label>
+          <input type="date" value="${to}" onchange="window._LDC_TO=this.value;nav('loaders')">
+        </div>
+        <button class="btn btn-gray btn-sm" onclick="window._LDC_FROM='';window._LDC_TO='';nav('loaders')">✕</button>
+        <button class="btn btn-gray btn-sm" onclick="printLoaderCollections(${selId||'null'})">🖨️ طباعة</button>
+      </div>
+    </div>
+
+    ${!ld||!from||!to?`<div class="card" style="text-align:center;padding:30px">
+      <div style="font-size:32px">📅</div>
+      <p class="text-gray mt8">اختر اللودر والفترة لعرض التحصيلات</p>
+    </div>`:`
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      <div class="card-sm text-center">
+        <div class="text-xs text-gray mb4">💰 إجمالي المبيعات (ساعات+تحميل)</div>
+        <div style="font-size:16px;font-weight:700;color:#1d4ed8">${curr(totalSalesAll)}</div>
+      </div>
+      <div class="card-sm text-center">
+        <div class="text-xs text-gray mb4">✅ إجمالي التحصيلات</div>
+        <div style="font-size:16px;font-weight:700;color:#16a34a">${curr(totalCollAll)}</div>
+      </div>
+      <div class="card-sm text-center" style="border-color:${totalRemaining>0?'#fca5a5':'#86efac'}">
+        <div class="text-xs text-gray mb4">⏳ إجمالي الباقي</div>
+        <div style="font-size:16px;font-weight:700;color:${totalRemaining>0?'#dc2626':'#16a34a'}">${curr(totalRemaining)}</div>
+      </div>
+    </div>
+
+    <!-- Summary table -->
+    <div class="card mb12">
+      <div class="section-title mb8">📊 ملخص بالعميل</div>
+      ${clients.length===0?'<div class="tbl-empty">لا توجد أعمال للودر في هذه الفترة</div>':`
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th>العميل</th>
+          <th style="text-align:center;color:#7c3aed">ساعات</th>
+          <th style="text-align:center;color:#0369a1">تحميل</th>
+          <th style="text-align:center;color:#1d4ed8">إجمالي المبيعات</th>
+          <th style="text-align:center;color:#16a34a">التحصيلات</th>
+          <th style="text-align:center;color:#dc2626">الباقي</th>
+        </tr></thead>
+        <tbody>
+          ${clients.map(clientName=>{
+            const cs = clientSales[clientName];
+            const totalSales = cs.hourly + cs.loading;
+            const cols = allCollections[clientName];
+            const totalColl = cols.reduce((s,c)=>s+c.amount,0);
+            const remaining = totalSales - totalColl;
+            return `<tr>
+              <td><strong>${clientName}</strong></td>
+              <td style="text-align:center;color:#7c3aed">${curr(cs.hourly)}</td>
+              <td style="text-align:center;color:#0369a1">${curr(cs.loading)}</td>
+              <td style="text-align:center;font-weight:700;color:#1d4ed8">${curr(totalSales)}</td>
+              <td style="text-align:center;font-weight:700;color:#16a34a">${curr(totalColl)}</td>
+              <td style="text-align:center;font-weight:700;color:${remaining>0?'#dc2626':'#16a34a'}">${curr(remaining)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot><tr style="background:#fefce8;font-weight:700">
+          <td>الإجمالي</td>
+          <td style="text-align:center;color:#7c3aed">${curr(clients.reduce((s,c)=>s+clientSales[c].hourly,0))}</td>
+          <td style="text-align:center;color:#0369a1">${curr(clients.reduce((s,c)=>s+clientSales[c].loading,0))}</td>
+          <td style="text-align:center;color:#1d4ed8">${curr(totalSalesAll)}</td>
+          <td style="text-align:center;color:#16a34a">${curr(totalCollAll)}</td>
+          <td style="text-align:center;color:${totalRemaining>0?'#dc2626':'#16a34a'}">${curr(totalRemaining)}</td>
+        </tr></tfoot>
+      </table></div>`}
+    </div>
+
+    <!-- Detail per client -->
+    ${clients.map(clientName=>{
+      const cs = clientSales[clientName];
+      const totalSales = cs.hourly + cs.loading;
+      const cols = allCollections[clientName];
+      const totalColl = cols.reduce((s,c)=>s+c.amount,0);
+      const remaining = totalSales - totalColl;
+      return `<div class="card mb10">
+        <div class="flex-between mb8">
+          <div>
+            <div style="font-size:14px;font-weight:700">👤 ${clientName}</div>
+            <div class="text-xs text-gray mt4">
+              مبيعات: ${curr(totalSales)} |
+              تحصيلات: ${curr(totalColl)} |
+              <span style="color:${remaining>0?'#dc2626':'#16a34a'};font-weight:700">الباقي: ${curr(remaining)}</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            ${remaining>0?`<button class="btn btn-primary btn-sm" onclick="openJrnModal('تحصيل',null,{party:'${clientName}',partyType:'عميل',description:'تحصيل أعمال لودر ${ld.name}'})">💵 تسجيل تحصيل</button>`:''}
+          </div>
+        </div>
+
+        <!-- Collections detail -->
+        ${cols.length===0?`<div class="alert alert-blue">لا توجد تحصيلات مسجّلة لهذا العميل في الفترة</div>`:`
+        <div class="tbl-wrap"><table style="font-size:10px">
+          <thead><tr style="background:#16a34a;color:#fff">
+            <th>التاريخ</th>
+            <th>البيان</th>
+            <th style="text-align:center">طريقة الدفع</th>
+            <th style="text-align:center">من أخذه</th>
+            <th style="text-align:center">المبلغ</th>
+          </tr></thead>
+          <tbody>
+            ${cols.map(col=>`<tr>
+              <td>${fmtDate(col.date)}</td>
+              <td class="text-xs">${col.description}</td>
+              <td style="text-align:center">${col.paymentType!=='—'?badge(col.paymentType,'blue'):'—'}</td>
+              <td style="text-align:center">${col.takenBy?`<span style="background:#fef3c7;color:#92400e;border-radius:10px;padding:2px 8px;font-size:10px">🤝 ${col.takenBy}</span>`:'<span class="text-gray text-xs">مباشر</span>'}</td>
+              <td style="text-align:center;font-weight:700;color:#16a34a">${curr(col.amount)}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot><tr style="background:#dcfce7;font-weight:700">
+            <td colspan="4">إجمالي التحصيلات</td>
+            <td style="text-align:center;color:#16a34a">${curr(totalColl)}</td>
+          </tr></tfoot>
+        </table></div>`}
+      </div>`;
+    }).join('')}
+    `}
+  </div>`;
+}
+
+function printLoaderCollections(loaderId){
+  const ld = DB.getAll('loaders').find(l=>l.id==loaderId);
+  const from = window._LDC_FROM||'';
+  const to   = window._LDC_TO||'';
+  if(!ld||!from||!to){ toast('اختر اللودر والفترة أولاً','error'); return; }
+
+  let clientSales = {};
+  DB.getAll('loaderHours').filter(j=>j.loaderId===loaderId&&j.date>=from&&j.date<=to).forEach(j=>{
+    if(!clientSales[j.client]) clientSales[j.client]={hourly:0,loading:0};
+    clientSales[j.client].hourly += Number(j.netClient)||0;
+  });
+  DB.getAll('loaderLoading').filter(j=>j.loaderId===loaderId&&j.date>=from&&j.date<=to).forEach(j=>{
+    if(!clientSales[j.client]) clientSales[j.client]={hourly:0,loading:0};
+    clientSales[j.client].loading += Number(j.netClient)||0;
+  });
+
+  const clients = Object.keys(clientSales);
+  const _n = n=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(Number(n)||0)+' ج.م';
+
+  function getColls(clientName){
+    return DB.getAll('journal').filter(j=>{
+      const d=j.date||'';if(d<from||d>to) return false;
+      if(j.entryType==='تحصيل'&&j.party===clientName) return true;
+      if(j.entryType==='يدوي'&&j.party===clientName&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
+      return false;
+    }).map(j=>({
+      date:j.date||'',
+      amount:j.entryType==='يدوي'?Number(j.creditAmount)||0:Number(j.amount)||0,
+      description:j.description||'—',
+      takenBy:(j.entryType==='يدوي'&&j.debitCode==='3001')?(j.debitName||'شريك'):'',
+    })).sort((a,b)=>a.date.localeCompare(b.date));
+  }
+
+  const totalSalesAll = clients.reduce((s,c)=>s+clientSales[c].hourly+clientSales[c].loading,0);
+  const allColls = {};
+  clients.forEach(c=>{ allColls[c]=getColls(c); });
+  const totalCollAll = clients.reduce((s,c)=>s+allColls[c].reduce((ss,col)=>ss+col.amount,0),0);
+  const totalRem = totalSalesAll - totalCollAll;
+
+  const co = DB.getCompany();
+  const css=`*{font-family:Tahoma,sans-serif;direction:rtl;font-size:10px}body{padding:14px}
+    h2{color:#1F4E78;font-size:14px;margin:0}.hdr{border-bottom:3px solid #1F4E78;padding-bottom:8px;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+    th{background:#1F4E78;color:#fff;padding:5px 7px;text-align:right}
+    td{padding:4px 7px;border-bottom:1px solid #eee}
+    tfoot td{background:#fefce8;font-weight:700}
+    .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+    .kpi-box{border:1px solid #e2e8f0;border-radius:6px;padding:8px;text-align:center}
+    .kpi-label{font-size:9px;color:#64748b}.kpi-val{font-size:13px;font-weight:700}
+    .client-hdr{background:#f8fafc;padding:6px 10px;font-weight:700;border-right:3px solid #1F4E78;margin:10px 0 5px;font-size:11px}
+    @media print{@page{margin:10mm;size:A4}}`;
+
+  const summaryRows = clients.map(c=>{
+    const cs=clientSales[c];
+    const cols=allColls[c];
+    const totalS=cs.hourly+cs.loading;
+    const totalC=cols.reduce((s,col)=>s+col.amount,0);
+    const rem=totalS-totalC;
+    return `<tr><td><strong>${c}</strong></td><td>${_n(cs.hourly)}</td><td>${_n(cs.loading)}</td><td style="font-weight:700">${_n(totalS)}</td><td style="color:#16a34a;font-weight:700">${_n(totalC)}</td><td style="color:${rem>0?'#dc2626':'#16a34a'};font-weight:700">${_n(rem)}</td></tr>`;
+  }).join('');
+
+  const detailHtml = clients.map(c=>{
+    const cols=allColls[c];
+    if(!cols.length) return '';
+    const rows=cols.map(col=>`<tr><td>${col.date}</td><td>${col.description}</td><td style="color:#16a34a;font-weight:700">${_n(col.amount)}</td><td>${col.takenBy?'🤝 '+col.takenBy:'مباشر'}</td></tr>`).join('');
+    const totalC=cols.reduce((s,col)=>s+col.amount,0);
+    return `<div class="client-hdr">👤 ${c}</div>
+      <table><thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>من أخذه</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="2">الإجمالي</td><td style="color:#16a34a">${_n(totalC)}</td><td></td></tr></tfoot></table>`;
+  }).join('');
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تحصيلات لودر</title><style>${css}</style></head><body>
+    <div class="hdr">
+      <h2>${co.name||'شركة الهنا للنقل'} — تحصيلات لودر: ${ld.name}</h2>
+      <div style="font-size:9px;color:#64748b;margin-top:3px">الفترة: ${from} — ${to} | تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-box"><div class="kpi-label">إجمالي المبيعات</div><div class="kpi-val" style="color:#1d4ed8">${_n(totalSalesAll)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">إجمالي التحصيلات</div><div class="kpi-val" style="color:#16a34a">${_n(totalCollAll)}</div></div>
+      <div class="kpi-box"><div class="kpi-label">الباقي</div><div class="kpi-val" style="color:${totalRem>0?'#dc2626':'#16a34a'}">${_n(totalRem)}</div></div>
+    </div>
+    <table><thead><tr><th>العميل</th><th>ساعات</th><th>تحميل</th><th>إجمالي المبيعات</th><th>التحصيلات</th><th>الباقي</th></tr></thead>
+    <tbody>${summaryRows}</tbody>
+    <tfoot><tr><td>الإجمالي</td><td>${_n(clients.reduce((s,c)=>s+clientSales[c].hourly,0))}</td><td>${_n(clients.reduce((s,c)=>s+clientSales[c].loading,0))}</td><td style="color:#1d4ed8">${_n(totalSalesAll)}</td><td style="color:#16a34a">${_n(totalCollAll)}</td><td style="color:${totalRem>0?'#dc2626':'#16a34a'}">${_n(totalRem)}</td></tr></tfoot></table>
+    <h3 style="color:#1F4E78;font-size:12px;margin:14px 0 6px;border-bottom:1px solid #e2e8f0;padding-bottom:4px">تفصيل التحصيلات بالعميل</h3>
+    ${detailHtml}
+    <script>setTimeout(()=>window.print(),600)<\/script></body></html>`);
+  w.document.close();
 }
