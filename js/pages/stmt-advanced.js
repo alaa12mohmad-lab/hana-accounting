@@ -846,6 +846,15 @@ window.updateQtyCell = function(input){
   var sPrice = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="sellPrice"]')?.value)||0;
   var bPrice = Number(document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="buyPrice"]')?.value)||0;
 
+  // إذا تغيّر خصم العميل → يُطبَّق تلقائياً على المورد
+  if(field === 'discountSell'){
+    var discBInput = document.querySelector('[data-sk="'+sk+'"][data-li="'+li+'"][data-field="discountBuy"]');
+    if(discBInput){
+      discBInput.value = discS;
+      discB = discS;
+    }
+  }
+
   // Update client net/total preview
   var netC = document.getElementById('net-c-'+sk+'-'+li);
   var totC = document.getElementById('tot-c-'+sk+'-'+li);
@@ -858,7 +867,7 @@ window.updateQtyCell = function(input){
   var netS = document.getElementById('net-s-'+sk+'-'+li);
   var totS = document.getElementById('tot-s-'+sk+'-'+li);
   if(cBuy && netS){
-    var nb = Math.max(0, trips*cBuy - discB);
+    var nb = Math.max(0, trips*cBuy - (field==='discountSell'?discS:discB));
     netS.textContent = nb.toFixed(1);
     if(totS) totS.textContent = curr(nb*bPrice);
   }
@@ -908,7 +917,14 @@ window.saveQtyRow = function(btn){
   var discS = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountSell"]')?.value)||0;
   var discB = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountBuy"]')?.value)||0;
   line.trips = trips;
-  if(mode==='client'){ line.discountSell=discS; line.discountM=discS; } else { line.discountBuy=discB; }
+  if(mode==='client'){
+    line.discountSell = discS;
+    line.discountM    = discS;
+    line.discountBuy  = discS; // خصم العميل يسمع في المورد
+  } else {
+    line.discountBuy  = discB;
+    // خصم المورد لا يُطبَّق على العميل
+  }
 
   if(mode==='client'){
     var cSell  = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="cubicSell"]')?.value)||0;
