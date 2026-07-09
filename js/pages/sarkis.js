@@ -371,13 +371,13 @@ function renderSkLines(){
           <input type="number" min="0" step="0.01"
             value="${line.discountSell!=null?line.discountSell:(line.discountM||'')}"
             placeholder="ع" title="خصم م³ العميل"
-            oninput="_SK_LINES[${i}].discountSell=Number(this.value);recalcSkLine(${i})"
+            oninput="_SK_LINES[${i}].discountSell=Number(this.value);if(!_SK_LINES[${i}]._buyDiscManual){_SK_LINES[${i}].discountBuy=Number(this.value);var _bEl=this.parentNode.querySelector('[title=\'خصم م³ المورد\']');if(_bEl)_bEl.value=this.value;}recalcSkLine(${i})"
             style="width:42px;color:#1a5276;border:1px solid #1a5276;border-radius:3px;padding:2px;text-align:center;font-size:10px">
           <span style="color:#94a3b8;font-size:9px">/</span>
           <input type="number" min="0" step="0.01"
             value="${line.discountBuy!=null?line.discountBuy:(line.discountM||'')}"
             placeholder="م" title="خصم م³ المورد"
-            oninput="_SK_LINES[${i}].discountBuy=Number(this.value);recalcSkLine(${i})"
+            oninput="_SK_LINES[${i}].discountBuy=Number(this.value);_SK_LINES[${i}]._buyDiscManual=true;recalcSkLine(${i})"
             style="width:42px;color:#dc2626;border:1px solid #dc2626;border-radius:3px;padding:2px;text-align:center;font-size:10px">
         </div>
       </td>
