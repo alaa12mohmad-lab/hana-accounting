@@ -458,7 +458,7 @@ function renderClientQty(){
         driverName: ln.driverName||'',
         trips:     Number(ln.trips)||0,
         cubicSell: ln.cubicSell!=null ? Number(ln.cubicSell) : Number(ln.cubicPerTrip)||0,
-        discountM: Number(ln.discountM)||0,
+        discountM: Number(ln.discountSell!=null?ln.discountSell:ln.discountM)||0,
         sellPrice: Number(ln.sellPrice)||0,
         netSell:   Number(ln.netSell||ln.netCubic)||0,
         sellTotal: Number(ln.sellTotal)||0,
@@ -709,7 +709,7 @@ function renderSupplierQty(){
         driverName: ln.driverName||'',
         trips:     Number(ln.trips)||0,
         cubicBuy:  ln.cubicBuy!=null ? Number(ln.cubicBuy) : Number(ln.cubicPerTrip)||0,
-        discountM: Number(ln.discountM)||0,
+        discountM: Number(ln.discountSell!=null?ln.discountSell:ln.discountM)||0,
         buyPrice:  Number(ln.buyPrice)||0,
         netBuy:    Number(ln.netBuy||ln.netCubic)||0,
         buyTotal:  Number(ln.buyTotal)||0,
@@ -865,6 +865,32 @@ window.updateQtyCell = function(input){
 };
 
 // ── Save row back to sarkis ───────────────────────────────────────
+// ── calcLine fallback for keshf al-kamiyat ──
+function calcLine(line){
+  var trips  = Number(line.trips)||0;
+  // Sell side
+  var cSell  = Number(line.cubicSell!=null ? line.cubicSell : line.cubicPerTrip)||0;
+  var discS  = Number(line.discountSell!=null ? line.discountSell : line.discountM)||0;
+  var sPrice = Number(line.sellPrice)||0;
+  var grossC = trips * cSell;
+  var netC   = Math.max(0, grossC - discS);
+  line.grossCubic  = grossC;
+  line.netCubic    = netC;
+  line.netSell     = netC;
+  line.sellTotal   = netC * sPrice;
+  // Buy side
+  var cBuy   = Number(line.cubicBuy!=null ? line.cubicBuy : line.cubicPerTrip)||0;
+  var discB  = Number(line.discountBuy!=null ? line.discountBuy : line.discountM)||0;
+  var bPrice = Number(line.buyPrice)||0;
+  var grossB = trips * cBuy;
+  var netB   = Math.max(0, grossB - discB);
+  line.grossCubic  = line.grossCubic || grossB;
+  line.netCubic    = line.netCubic  || netB;
+  line.buyTotal    = netB * bPrice;
+  line.profit      = line.sellTotal - line.buyTotal;
+  return line;
+}
+
 window.saveQtyRow = function(btn){
   var skId = Number(btn.getAttribute('data-sk'));
   var li   = Number(btn.getAttribute('data-li'));
@@ -882,7 +908,7 @@ window.saveQtyRow = function(btn){
   var discS = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountSell"]')?.value)||0;
   var discB = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="discountBuy"]')?.value)||0;
   line.trips = trips;
-  if(mode==='client'){ line.discountSell=discS; } else { line.discountBuy=discB; }
+  if(mode==='client'){ line.discountSell=discS; line.discountM=discS; } else { line.discountBuy=discB; }
 
   if(mode==='client'){
     var cSell  = Number(document.querySelector('[data-sk="'+skId+'"][data-li="'+li+'"][data-field="cubicSell"]')?.value)||0;
