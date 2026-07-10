@@ -144,7 +144,7 @@ function openJrnModal(type,editId,prefill){
       <div id="jn-balance-ind" class="alert alert-blue" style="font-size:11px;padding:7px 10px">أدخل المبلغين للتحقق من التوازن</div>
       <div class="form-group mt10"><label><span class="req">*</span>البيان</label><input id="jn-desc" value="${v('description')}" placeholder="وصف القيد"></div>
       <div style="background:#f5f3ff;border-radius:8px;padding:10px;margin-top:8px;border:1px dashed #7c3aed">
-        <div style="color:#7c3aed;font-weight:700;font-size:11px;margin-bottom:6px">🚜 ربط بلودر (اختياري — لمصاريف السولار/الصيانة/الراتب)</div>
+        <div style="color:#7c3aed;font-weight:700;font-size:11px;margin-bottom:6px">🚜 ربط بلودر (اختياري — مصاريف السولار/الصيانة/الراتب، أو تحصيل عميل اللودر)</div>
         <div class="form-row fr2">
           <div class="form-group" style="margin-bottom:0"><label>اللودر</label>
             <select id="jn-loader">
@@ -159,6 +159,8 @@ function openJrnModal(type,editId,prefill){
               <option ${v('loaderExpType')==='صيانة'?'selected':''}>صيانة</option>
               <option ${v('loaderExpType')==='راتب سائق'?'selected':''}>راتب سائق</option>
               <option ${v('loaderExpType')==='توزيع أرباح'?'selected':''}>توزيع أرباح</option>
+              <option ${v('loaderExpType')==='تحصيل عميل'?'selected':''}>تحصيل عميل</option>
+
             </select>
           </div>
         </div>
