@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function(){
     backup:        typeof renderBackup==='function'?renderBackup:function(){return ''},
     invitations:   typeof renderInvitations==='function'?renderInvitations:function(){return '';},
     loaders:       typeof renderLoaders==='function'?renderLoaders:function(){return '';},
+    allworks:      typeof renderAllWorks==='function'?renderAllWorks:function(){return '';},
   });
 
   // Date in topbar
