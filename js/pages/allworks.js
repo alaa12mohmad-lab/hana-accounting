@@ -9,10 +9,106 @@ window._AW = window._AW || {
   page: 1,
   sortCol: 'date',
   sortDir: 'desc',
-  filters: {},         // { colKey: searchStr }
-  footMode: {},        // { colKey: 'sum'|'avg'|'count' }
+  filters: {},
+  footMode: {},
   contextMenu: null,
+  colOrder: null,      // مصفوفة مفاتيح الأعمدة بالترتيب
+  hiddenCols: {},      // { colKey: true } للأعمدة المخفية
+  dragCol: null,       // العمود المسحوب حالياً
 };
+
+// تهيئة ترتيب الأعمدة من localStorage
+function _awInitCols(){
+  if(!window._AW.colOrder){
+    const saved = localStorage.getItem('_aw_col_order');
+    window._AW.colOrder = saved ? JSON.parse(saved) : AW_COLS.map(c=>c.key);
+  }
+  if(!window._AW.hiddenCols || Object.keys(window._AW.hiddenCols).length===0){
+    const saved = localStorage.getItem('_aw_hidden_cols');
+    window._AW.hiddenCols = saved ? JSON.parse(saved) : {};
+  }
+}
+
+function _awSaveCols(){
+  localStorage.setItem('_aw_col_order', JSON.stringify(window._AW.colOrder));
+  localStorage.setItem('_aw_hidden_cols', JSON.stringify(window._AW.hiddenCols));
+}
+
+function _awGetOrderedCols(){
+  _awInitCols();
+  const aw = window._AW;
+  // أضف أي أعمدة جديدة غير موجودة في الترتيب
+  AW_COLS.forEach(c=>{ if(!aw.colOrder.includes(c.key)) aw.colOrder.push(c.key); });
+  return aw.colOrder
+    .map(key=>AW_COLS.find(c=>c.key===key))
+    .filter(c=>c && !aw.hiddenCols[c.key]);
+}
+
+// Drag & Drop handlers
+function awDragStart(e, colKey){
+  window._AW.dragCol = colKey;
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.style.opacity = '0.5';
+}
+function awDragEnd(e){
+  e.target.style.opacity = '1';
+  window._AW.dragCol = null;
+  document.querySelectorAll('.aw-th-drag').forEach(th=>th.classList.remove('aw-drag-over'));
+}
+function awDragOver(e, colKey){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.aw-th-drag').forEach(th=>th.classList.remove('aw-drag-over'));
+  const th = document.querySelector('[data-col-key="'+colKey+'"]');
+  if(th) th.classList.add('aw-drag-over');
+}
+function awDrop(e, targetKey){
+  e.preventDefault();
+  const dragKey = window._AW.dragCol;
+  if(!dragKey || dragKey===targetKey) return;
+  const order = window._AW.colOrder;
+  const fromIdx = order.indexOf(dragKey);
+  const toIdx   = order.indexOf(targetKey);
+  if(fromIdx===-1||toIdx===-1) return;
+  order.splice(fromIdx,1);
+  order.splice(toIdx,0,dragKey);
+  _awSaveCols();
+  nav('allworks');
+}
+
+// Toggle column visibility
+function awToggleCol(key){
+  if(window._AW.hiddenCols[key]) delete window._AW.hiddenCols[key];
+  else window._AW.hiddenCols[key] = true;
+  _awSaveCols();
+  nav('allworks');
+}
+
+// Open columns manager
+function awOpenColMgr(){
+  _awInitCols();
+  const aw = window._AW;
+  const items = aw.colOrder.map(key=>{
+    const col = AW_COLS.find(c=>c.key===key);
+    if(!col) return '';
+    const hidden = aw.hiddenCols[key];
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;border-radius:6px;background:${hidden?'#f8fafc':'#f0fdf4'};margin-bottom:4px;border:1px solid ${hidden?'#e2e8f0':'#86efac'}">
+      <input type="checkbox" ${hidden?'':'checked'} onchange="awToggleCol('${key}')"
+        style="width:16px;height:16px;accent-color:#16a34a">
+      <span style="font-size:12px;font-weight:${hidden?'400':'600'}">${col.label}</span>
+    </label>`;
+  }).join('');
+
+  openModal('⚙️ إدارة الأعمدة',
+    `<div style="margin-bottom:10px;display:flex;gap:8px">
+      <button class="btn btn-gray btn-sm" onclick="Object.keys(window._AW.hiddenCols).forEach(k=>delete window._AW.hiddenCols[k]);_awSaveCols();closeModal();nav('allworks')">✅ إظهار الكل</button>
+      <button class="btn btn-gray btn-sm" onclick="AW_COLS.forEach(c=>{window._AW.hiddenCols[c.key]=true});_awSaveCols();closeModal();nav('allworks')">❌ إخفاء الكل</button>
+      <button class="btn btn-gray btn-sm" onclick="window._AW.colOrder=AW_COLS.map(c=>c.key);window._AW.hiddenCols={};_awSaveCols();closeModal();nav('allworks')">🔄 إعادة تعيين</button>
+    </div>
+    <div style="max-height:400px;overflow-y:auto">${items}</div>`,
+    `<button class="btn btn-primary" onclick="closeModal()">تم</button>`,
+    'modal-sm');
+}
 
 // ── Column definitions ─────────────────────────────────────────────
 const AW_COLS = [
@@ -131,7 +227,9 @@ function _awFmt(val, type){
 
 // ── Render ─────────────────────────────────────────────────────────
 function renderAllWorks(){
+  _awInitCols();
   const aw   = window._AW;
+  const orderedCols = _awGetOrderedCols();
   const allRows = _awBuildRows();
   const filtered = _awFilterRows(allRows);
   const total = filtered.length;
@@ -141,7 +239,7 @@ function renderAllWorks(){
   const pageRows = filtered.slice(start, start+aw.pageSize);
 
   // Column filter inputs
-  const filterInputs = `<th style="padding:2px;background:#f1f5f9;position:sticky;right:0;z-index:2"></th>` + AW_COLS.map(col=>`
+  const filterInputs = `<th style="padding:2px;background:#f1f5f9;position:sticky;right:0;z-index:2"></th>` + orderedCols.map(col=>`
     <th style="padding:2px;background:#f1f5f9">
       <input type="text" placeholder="🔍"
         value="${(aw.filters[col.key]||'').replace(/"/g,'&quot;')}"
@@ -151,20 +249,26 @@ function renderAllWorks(){
 
   // Header cells
   const actionHeader = `<th style="padding:6px 4px;background:#1F4E78;color:#fff;font-size:10px;min-width:80px;position:sticky;right:0;z-index:2">إجراء</th>`;
-  const headerCells = actionHeader + AW_COLS.map(col=>`
-    <th onclick="window._AW.sortCol='${col.key}';window._AW.sortDir=window._AW.sortDir==='asc'?'desc':'asc';nav('allworks')"
-      style="padding:6px 4px;white-space:nowrap;cursor:pointer;user-select:none;min-width:${col.w}px;background:#1F4E78;color:#fff;font-size:10px">
-      ${col.label}
+  const headerCells = actionHeader + orderedCols.map(col=>`
+    <th class="aw-th-drag" data-col-key="${col.key}"
+      draggable="true"
+      ondragstart="awDragStart(event,'${col.key}')"
+      ondragend="awDragEnd(event)"
+      ondragover="awDragOver(event,'${col.key}')"
+      ondrop="awDrop(event,'${col.key}')"
+      onclick="window._AW.sortCol='${col.key}';window._AW.sortDir=window._AW.sortDir==='asc'?'desc':'asc';nav('allworks')"
+      style="padding:6px 4px;white-space:nowrap;cursor:grab;user-select:none;min-width:${col.w}px;background:#1F4E78;color:#fff;font-size:10px;transition:background .2s">
+      ⠿ ${col.label}
       ${aw.sortCol===col.key?(aw.sortDir==='asc'?'↑':'↓'):''}
     </th>`).join('');
 
   // Data rows
   const dataRows = pageRows.length===0
-    ? `<tr><td colspan="${AW_COLS.length+1}" class="tbl-empty">لا توجد بيانات</td></tr>`
+    ? `<tr><td colspan="${orderedCols.length+1}" class="tbl-empty">لا توجد بيانات</td></tr>`
     : pageRows.map((r,i)=>{
         const bg = i%2===0?'':'background:#f8fafc';
         const rowId = 'aw-row-'+r._skId+'-'+r._lineIdx;
-        const cells = AW_COLS.map(col=>{
+        const cells = orderedCols.map(col=>{
           const val = r[col.key];
           const isNum = col.type==='num'||col.type==='money';
           // Editable cells
@@ -196,7 +300,7 @@ function renderAllWorks(){
       }).join('');
 
   // Footer row with sum/avg/count
-  const footerCells = `<td style="background:#fefce8;padding:4px 6px;font-size:9px;position:sticky;right:0;z-index:1"></td>` + AW_COLS.map(col=>{
+  const footerCells = `<td style="background:#fefce8;padding:4px 6px;font-size:9px;position:sticky;right:0;z-index:1"></td>` + orderedCols.map(col=>{
     const isNum = col.type==='num'||col.type==='money';
     if(!isNum) return `<td style="background:#fefce8;padding:4px 6px;font-size:9px;text-align:center" oncontextmenu="awCtxMenu(event,'${col.key}');return false">—</td>`;
     const mode = aw.footMode[col.key]||'sum';
@@ -222,10 +326,16 @@ function renderAllWorks(){
   for(let p=Math.max(1,aw.page-2);p<=Math.min(pages,aw.page+2);p++) pageNums.push(p);
 
   return `<div onclick="awCloseCtx(event)">
+    <!-- Drag CSS -->
+    <style>
+      .aw-th-drag:hover { background:#2563eb !important; }
+      .aw-drag-over { background:#f59e0b !important; outline:2px dashed #d97706; }
+    </style>
     <!-- Header -->
     <div class="page-header">
       <div class="section-title" style="margin:0">📑 الأعمال — كل سطور الحوافظ</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-gray btn-sm" onclick="awOpenColMgr()">⚙️ الأعمدة</button>
         <button class="btn btn-gray btn-sm" onclick="awExportExcel()">📊 Excel</button>
         <button class="btn btn-gray btn-sm" onclick="awExportPDF()">🖨️ PDF</button>
       </div>
@@ -416,25 +526,26 @@ function awExportExcel(){
   const rows = _awFilterRows(_awBuildRows());
   const co   = DB.getCompany();
 
+  const exportCols = _awGetOrderedCols();
   const header = [
-    [co.name||'شركة الهنا للنقل', ...Array(AW_COLS.length-1).fill('')],
-    ['صفحة الأعمال الشاملة', ...Array(AW_COLS.length-1).fill('')],
-    AW_COLS.map(c=>c.label),
+    [co.name||'شركة الهنا للنقل', ...Array(exportCols.length-1).fill('')],
+    ['صفحة الأعمال الشاملة', ...Array(exportCols.length-1).fill('')],
+    exportCols.map(c=>c.label),
   ];
-  const data = rows.map(r=>AW_COLS.map(c=>{
+  const data = rows.map(r=>exportCols.map(c=>{
     const v = r[c.key];
     return (c.type==='num'||c.type==='money')?Number(v)||0:v??'';
   }));
 
   // Footer totals
-  const totals = AW_COLS.map(c=>{
+  const totals = exportCols.map(c=>{
     if(c.type!=='num'&&c.type!=='money') return '';
     return rows.reduce((s,r)=>s+(Number(r[c.key])||0),0);
   });
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([...header,...data,totals]);
-  ws['!cols'] = AW_COLS.map(c=>({wch:Math.round(c.w/7)}));
+  ws['!cols'] = exportCols.map(c=>({wch:Math.round(c.w/7)}));
   XLSX.utils.book_append_sheet(wb, ws, 'الأعمال');
   XLSX.writeFile(wb, 'الأعمال_'+new Date().toLocaleDateString('ar-EG').replace(/\//g,'-')+'.xlsx');
   toast('✅ تم تصدير Excel');
@@ -457,9 +568,10 @@ function awExportPDF(){
     tfoot td{background:#fefce8;font-weight:700}
     @media print{@page{margin:8mm;size:A3 landscape}body{padding:0}}`;
 
-  const thead = '<tr>'+AW_COLS.map(c=>`<th>${c.label}</th>`).join('')+'</tr>';
-  const tbody = rows.map(r=>'<tr>'+AW_COLS.map(c=>`<td>${_awFmt(r[c.key],c.type)}</td>`).join('')+'</tr>').join('');
-  const tfoot = '<tr>'+AW_COLS.map(c=>{
+  const pdfCols = _awGetOrderedCols();
+  const thead = '<tr>'+pdfCols.map(c=>`<th>${c.label}</th>`).join('')+'</tr>';
+  const tbody = rows.map(r=>'<tr>'+pdfCols.map(c=>`<td>${_awFmt(r[c.key],c.type)}</td>`).join('')+'</tr>').join('');
+  const tfoot = '<tr>'+pdfCols.map(c=>{
     if(c.type!=='num'&&c.type!=='money') return '<td></td>';
     return `<td style="text-align:center;font-weight:700">${curr(rows.reduce((s,r)=>s+(Number(r[c.key])||0),0))}</td>`;
   }).join('')+'</tr>';
