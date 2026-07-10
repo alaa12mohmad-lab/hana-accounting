@@ -141,7 +141,7 @@ function renderAllWorks(){
   const pageRows = filtered.slice(start, start+aw.pageSize);
 
   // Column filter inputs
-  const filterInputs = AW_COLS.map(col=>`
+  const filterInputs = `<th style="padding:2px;background:#f1f5f9;position:sticky;right:0;z-index:2"></th>` + AW_COLS.map(col=>`
     <th style="padding:2px;background:#f1f5f9">
       <input type="text" placeholder="🔍"
         value="${(aw.filters[col.key]||'').replace(/"/g,'&quot;')}"
@@ -150,7 +150,8 @@ function renderAllWorks(){
     </th>`).join('');
 
   // Header cells
-  const headerCells = AW_COLS.map(col=>`
+  const actionHeader = `<th style="padding:6px 4px;background:#1F4E78;color:#fff;font-size:10px;min-width:80px;position:sticky;right:0;z-index:2">إجراء</th>`;
+  const headerCells = actionHeader + AW_COLS.map(col=>`
     <th onclick="window._AW.sortCol='${col.key}';window._AW.sortDir=window._AW.sortDir==='asc'?'desc':'asc';nav('allworks')"
       style="padding:6px 4px;white-space:nowrap;cursor:pointer;user-select:none;min-width:${col.w}px;background:#1F4E78;color:#fff;font-size:10px">
       ${col.label}
@@ -162,6 +163,7 @@ function renderAllWorks(){
     ? `<tr><td colspan="${AW_COLS.length+1}" class="tbl-empty">لا توجد بيانات</td></tr>`
     : pageRows.map((r,i)=>{
         const bg = i%2===0?'':'background:#f8fafc';
+        const rowId = 'aw-row-'+r._skId+'-'+r._lineIdx;
         const cells = AW_COLS.map(col=>{
           const val = r[col.key];
           const isNum = col.type==='num'||col.type==='money';
@@ -170,8 +172,8 @@ function renderAllWorks(){
             return `<td style="padding:2px;${bg}">
               <input type="number" min="0" step="0.01"
                 value="${val??''}"
-                data-sk="${r._skId}" data-li="${r._lineIdx}" data-field="${col.key}"
-                onchange="awSaveCell(this)"
+                data-sk="${r._skId}" data-li="${r._lineIdx}" data-field="${col.key}" data-rowid="${rowId}"
+                oninput="awMarkDirty('${rowId}')"
                 style="width:${col.w-6}px;text-align:center;border:1px solid #e2e8f0;border-radius:3px;padding:2px;font-size:10px;font-family:inherit">
             </td>`;
           }
@@ -179,19 +181,22 @@ function renderAllWorks(){
             ${_awFmt(val,col.type)}
           </td>`;
         }).join('');
-        return `<tr>
-          ${cells}
-          <td style="padding:2px;${bg}">
-            <button onclick="openSarkiModal(${r._skId})"
-              style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10px;white-space:nowrap">
-              ✏️ فتح
-            </button>
-          </td>
-        </tr>`;
+        // Action cell — sticky right
+        const actionCell = `<td id="act-${rowId}" style="padding:3px 4px;${bg};position:sticky;right:0;z-index:1;white-space:nowrap;background:${i%2===0?'#fff':'#f8fafc'}">
+          <button id="save-${rowId}" onclick="awSaveRow('${rowId}',${r._skId},${r._lineIdx})"
+            style="display:none;background:#16a34a;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;font-family:inherit;margin-left:3px">
+            💾 حفظ
+          </button>
+          <button onclick="openSarkiModal(${r._skId})"
+            style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;white-space:nowrap">
+            ✏️ فتح
+          </button>
+        </td>`;
+        return `<tr id="${rowId}">${actionCell}${cells}</tr>`;
       }).join('');
 
   // Footer row with sum/avg/count
-  const footerCells = AW_COLS.map(col=>{
+  const footerCells = `<td style="background:#fefce8;padding:4px 6px;font-size:9px;position:sticky;right:0;z-index:1"></td>` + AW_COLS.map(col=>{
     const isNum = col.type==='num'||col.type==='money';
     if(!isNum) return `<td style="background:#fefce8;padding:4px 6px;font-size:9px;text-align:center" oncontextmenu="awCtxMenu(event,'${col.key}');return false">—</td>`;
     const mode = aw.footMode[col.key]||'sum';
@@ -253,15 +258,12 @@ function renderAllWorks(){
     <div style="overflow-x:auto;border:1px solid #e2e8f0;border-radius:8px">
       <table style="border-collapse:collapse;width:100%;min-width:1800px">
         <thead>
-          <tr>${headerCells}<th style="background:#1F4E78;color:#fff;padding:6px;font-size:10px;min-width:60px">إجراء</th></tr>
-          <tr>${filterInputs}<th style="background:#f1f5f9"></th></tr>
+          <tr>${headerCells}</tr>
+          <tr>${filterInputs}</tr>
         </thead>
         <tbody>${dataRows}</tbody>
         <tfoot>
-          <tr>
-            ${footerCells}
-            <td style="background:#fefce8"></td>
-          </tr>
+          <tr>${footerCells}</tr>
         </tfoot>
       </table>
     </div>
@@ -292,6 +294,26 @@ function renderAllWorks(){
     <!-- Context menu -->
     <div id="aw-ctx" style="display:none;position:fixed;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);z-index:9999;min-width:140px;padding:4px 0"></div>
   </div>`;
+}
+
+// ── Mark row dirty (show save button) ─────────────────────────────
+function awMarkDirty(rowId){
+  const btn = document.getElementById('save-'+rowId);
+  if(btn) btn.style.display='inline-block';
+  const row = document.getElementById(rowId);
+  if(row) row.style.outline='2px solid #f59e0b';
+}
+
+// ── Save full row ──────────────────────────────────────────────────
+function awSaveRow(rowId, skId, li){
+  // اجمع كل الحقول القابلة للتعديل في هذا السطر
+  const inputs = document.querySelectorAll(`[data-rowid="${rowId}"]`);
+  inputs.forEach(input=>{ awSaveCell(input); });
+  // أخفِ زر الحفظ
+  const btn = document.getElementById('save-'+rowId);
+  if(btn) btn.style.display='none';
+  const row = document.getElementById(rowId);
+  if(row){ row.style.outline='none'; row.style.background='rgba(22,163,74,.1)'; setTimeout(()=>row.style.background='',1500); }
 }
 
 // ── Save cell inline ───────────────────────────────────────────────
