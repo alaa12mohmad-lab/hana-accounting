@@ -278,8 +278,7 @@ function renderLoaderReport(loaders){
           <input type="date" value="${to}" onchange="window._LD_TO=this.value;nav('loaders')">
         </div>
         <button class="btn btn-gray btn-sm" onclick="window._LD_FROM='';window._LD_TO='';nav('loaders')">✕</button>
-        <button class="btn btn-gray btn-sm" onclick="printLoaderReport()">🖨️ طباعة تفصيلي</button>
-        <button class="btn btn-primary btn-sm" onclick="printLoaderFinancialSummary(${selId||'null'})">📊 التحليل المالي</button>
+        <button class="btn btn-gray btn-sm" onclick="printLoaderReport()">🖨️ طباعة</button>
         <button class="btn btn-gray btn-sm" onclick="exportLoaderReportExcel()">📊 Excel</button>
       </div>
     </div>`;
@@ -1489,7 +1488,7 @@ function openLoaderHourlyModal(jobId,loaderId){
     </div>
     <div class="form-row fr3 mb8">
       <div class="form-group"><label>عدد الساعات <span class="req">*</span></label><input type="number" id="lh-hours" min="0" step="0.5" value="${v('hours',0)}" oninput="window._lhRecalc&&window._lhRecalc()"></div>
-      <div class="form-group"><label>سعر الساعة (ج.م)</label><input type="number" id="lh-price" min="0" step="0.5" value="${v('pricePerHour',0)}" oninput="window._lhRecalc&&window._lhRecalc()"></div>
+      <div class="form-group"><label>سعر الساعة (ج.م)</label><input type="number" id="lh-price" min="0" step="0.5" value="${v('pricePerHour',0)}" oninput="this.dataset.manual='1';window._lhRecalc&&window._lhRecalc()"></div>
       <div class="form-group"><label>الإجمالي</label><div id="lh-gross" style="font-size:16px;font-weight:700;color:#1d4ed8;padding:8px 0">${curr(v('grossAmount',0))}</div></div>
     </div>
     <div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:10px">
@@ -1505,7 +1504,7 @@ function openLoaderHourlyModal(jobId,loaderId){
       const hours=Number(document.getElementById('lh-hours')?.value)||0;
       const hp=(ld?.hourlyPrices||[]).find(p=>p.client===client);
       const price=hp?Number(hp.pricePerHour)||0:0;
-      const el=document.getElementById('lh-price');if(el&&!el.dataset.manual)el.value=price;
+      const el=document.getElementById('lh-price');if(el&&!el.dataset.manual&&price>0)el.value=price;
       const gross=hours*(Number(document.getElementById('lh-price')?.value)||0);
       const g=document.getElementById('lh-gross');if(g)g.textContent=curr(gross);
       const discC=Number(document.getElementById('lh-disc-client')?.value)||0;
@@ -1982,215 +1981,5 @@ function printLoaderCollections(loaderId){
     <h3 style="color:#1F4E78;font-size:12px;margin:14px 0 6px;border-bottom:1px solid #e2e8f0;padding-bottom:4px">تفصيل التحصيلات بالعميل</h3>
     ${detailHtml}
     <script>setTimeout(()=>window.print(),600)<\/script></body></html>`);
-  w.document.close();
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// LOADER FINANCIAL SUMMARY REPORT — التحليل المالي الشامل للودر
-// ═══════════════════════════════════════════════════════════════════
-function printLoaderFinancialSummary(loaderId){
-  const loaders = DB.getAll('loaders');
-  const ld = loaders.find(l=>l.id==loaderId);
-  if(!ld){ toast('اختر لودراً أولاً','error'); return; }
-
-  const from = window._LD_FROM||'';
-  const to   = window._LD_TO||'';
-  const co   = DB.getCompany();
-  const _n   = n=>new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(Number(n)||0)+' ج.م';
-  const _d   = d=>{ if(!d)return'—'; const dd=new Date(d); return isNaN(dd)?d:dd.toLocaleDateString('ar-EG',{day:'2-digit',month:'2-digit',year:'numeric'}); };
-
-  // ── الإيرادات ──────────────────────────────────────────
-  let revCubic=0, revHourly=0, revLoading=0;
-
-  DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي'&&(!from||sk.date>=from)&&(!to||sk.date<=to)).forEach(sk=>{
-    (sk.lines||[]).forEach(ln=>{
-      if(ln.loaderName!==ld.name) return;
-      revCubic += (Number(ln.netSell||ln.netCubic)||0) * getLoaderPrice(ld, sk.material);
-    });
-  });
-  DB.getAll('loaderHours').filter(j=>j.loaderId===ld.id&&(!from||j.date>=from)&&(!to||j.date<=to))
-    .forEach(j=>{ revHourly += Number(j.netClient)||0; });
-  DB.getAll('loaderLoading').filter(j=>j.loaderId===ld.id&&(!from||j.date>=from)&&(!to||j.date<=to))
-    .forEach(j=>{ revLoading += Number(j.netClient)||0; });
-  const grandRev = revCubic + revHourly + revLoading;
-
-  // ── المصاريف مفصّلة ──────────────────────────────────
-  const jAll = DB.getAll('journal').filter(j=>
-    j.loaderId===ld.id && (!from||(j.date||'')>=from) && (!to||(j.date||'')<=to)
-  );
-  const jExp = jAll.filter(j=>j.loaderExpType!=='توزيع أرباح');
-  const expByType = {};
-  jExp.forEach(j=>{
-    const t = j.loaderExpType||'أخرى';
-    if(!expByType[t]) expByType[t]={total:0,rows:[]};
-    const amt = Number(j.amount||j.debitAmount)||0;
-    expByType[t].total += amt;
-    expByType[t].rows.push({date:j.date||'',desc:j.description||'—',amt});
-  });
-  const totalExp = Object.values(expByType).reduce((s,v)=>s+v.total,0);
-  const netProfit = grandRev - totalExp;
-
-  // ── رأس المال ─────────────────────────────────────────
-  const capital = Number(ld.purchasePrice)||0;
-  const partners = ld.partners||[];
-  const companyPct = 100 - partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
-
-  // ── واصل للشركاء (تراكمي — بدون فلتر تاريخ) ─────────
-  const disbRows = [];
-  let totalDisbursed = 0;
-  partners.forEach(pt=>{
-    const disbursed = getLoaderPartnerDisbursed(ld.id, pt.partnerName);
-    const share = netProfit * Number(pt.ownershipPct)/100;
-    const remaining = share - disbursed;
-    totalDisbursed += disbursed;
-    disbRows.push({name:pt.partnerName, pct:pt.ownershipPct, share, disbursed, remaining});
-  });
-  const companyShare = netProfit * companyPct/100;
-  const companyDisbursed = 0;
-
-  // ── HTML ──────────────────────────────────────────────
-  const css = `
-    *{font-family:Tahoma,sans-serif;direction:rtl;font-size:10px;margin:0;padding:0;box-sizing:border-box}
-    body{padding:16px;color:#111}
-    .hdr{border-bottom:3px solid #1F4E78;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-start}
-    .co{font-size:15px;font-weight:700;color:#1F4E78}
-    .sub{font-size:9px;color:#64748b;margin-top:2px}
-    .net-box{background:#1F4E78;color:#fff;border-radius:10px;padding:10px 20px;text-align:center}
-    .net-label{font-size:9px;opacity:.8}
-    .net-val{font-size:22px;font-weight:700}
-    .section{font-size:12px;font-weight:700;color:#1F4E78;margin:14px 0 6px;padding-right:8px;border-right:3px solid #1F4E78}
-    .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
-    .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
-    .kpi{border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center}
-    .kpi-label{font-size:9px;color:#64748b;margin-bottom:3px}
-    .kpi-val{font-size:13px;font-weight:700}
-    table{width:100%;border-collapse:collapse;margin-bottom:14px}
-    th{background:#1F4E78;color:#fff;padding:6px 7px;text-align:right;font-size:10px}
-    td{padding:5px 7px;border-bottom:1px solid #f1f5f9;font-size:10px}
-    tfoot td{background:#fefce8;font-weight:700}
-    .partner-box{border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-    .partner-name{font-weight:700;font-size:11px}
-    .partner-pct{color:#7c3aed;font-size:10px}
-    .partner-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;min-width:300px}
-    .pstat-label{font-size:8px;color:#94a3b8}
-    .pstat-val{font-size:11px;font-weight:700}
-    .footer{margin-top:14px;border-top:1px solid #e2e8f0;padding-top:6px;display:flex;justify-content:space-between;font-size:9px;color:#94a3b8}
-    .bar-wrap{background:#f1f5f9;border-radius:20px;height:8px;overflow:hidden;margin-top:4px}
-    .bar-fill{height:8px;border-radius:20px;background:linear-gradient(90deg,#1d4ed8,#7c3aed)}
-    @media print{@page{margin:10mm;size:A4}body{padding:0}}`;
-
-  // Revenue breakdown bars
-  const revBars = [
-    ['📦 خامات', revCubic, '#16a34a'],
-    ['⏱️ ساعات', revHourly, '#7c3aed'],
-    ['🚛 تحميل', revLoading, '#0369a1'],
-  ].filter(r=>r[1]>0).map(([label,val,col])=>{
-    const pct = grandRev>0 ? (val/grandRev*100).toFixed(1) : 0;
-    return `<div style="margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
-        <span style="font-weight:600">${label}</span>
-        <span style="color:${col};font-weight:700">${_n(val)} <span style="color:#94a3b8;font-weight:400">(${pct}%)</span></span>
-      </div>
-      <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${col}"></div></div>
-    </div>`;
-  }).join('');
-
-  // Expense breakdown
-  const expTable = Object.entries(expByType).length===0 ? '<p style="color:#94a3b8;text-align:center;padding:10px">لا توجد مصاريف مسجّلة</p>' :
-    `<table><thead><tr><th>نوع المصروف</th><th>التاريخ</th><th>البيان</th><th style="text-align:left">المبلغ</th></tr></thead>
-    <tbody>${Object.entries(expByType).flatMap(([type,data])=>
-      data.rows.map(r=>`<tr><td>${type}</td><td>${_d(r.date)}</td><td>${r.desc}</td><td style="text-align:left;color:#dc2626;font-weight:600">${_n(r.amt)}</td></tr>`)
-    ).join('')}</tbody>
-    <tfoot><tr><td colspan="3">إجمالي المصاريف</td><td style="text-align:left;color:#dc2626">${_n(totalExp)}</td></tr></tfoot></table>`;
-
-  // Partners section
-  const partnerHtml = disbRows.map(pt=>`
-    <div class="partner-box">
-      <div>
-        <div class="partner-name">🤝 ${pt.name}</div>
-        <div class="partner-pct">${pt.pct}% ملكية — رأس ماله: ${_n(capital*Number(pt.pct)/100)}</div>
-      </div>
-      <div class="partner-stats">
-        <div><div class="pstat-label">حصته من الربح</div><div class="pstat-val" style="color:#16a34a">${_n(pt.share)}</div></div>
-        <div><div class="pstat-label">واصله فعلاً</div><div class="pstat-val" style="color:#1d4ed8">${_n(pt.disbursed)}</div></div>
-        <div><div class="pstat-label">المتبقي له</div><div class="pstat-val" style="color:${pt.remaining>0?'#d97706':'#16a34a'}">${_n(pt.remaining)}</div></div>
-      </div>
-    </div>`).join('');
-
-  const companyHtml = `
-    <div class="partner-box" style="background:#f8fafc">
-      <div>
-        <div class="partner-name">🏢 الشركة</div>
-        <div class="partner-pct">${companyPct.toFixed(1)}% ملكية — رأس مالها: ${_n(capital*companyPct/100)}</div>
-      </div>
-      <div class="partner-stats">
-        <div><div class="pstat-label">حصتها من الربح</div><div class="pstat-val" style="color:#16a34a">${_n(companyShare)}</div></div>
-        <div><div class="pstat-label">واصلها فعلاً</div><div class="pstat-val" style="color:#94a3b8">—</div></div>
-        <div><div class="pstat-label">المتبقي</div><div class="pstat-val" style="color:#1d4ed8">${_n(companyShare)}</div></div>
-      </div>
-    </div>`;
-
-  const w = window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">
-    <title>التحليل المالي — ${ld.name}</title>
-    <style>${css}</style></head><body>
-
-    <div class="hdr">
-      <div>
-        <div class="co">${co.name||'شركة الهنا للنقل'}</div>
-        <div class="sub">التحليل المالي الشامل — لودر: ${ld.name}</div>
-        <div class="sub">الفترة: ${from?_d(from):'منذ البداية'} — ${to?_d(to):'حتى اليوم'} | تاريخ الطباعة: ${new Date().toLocaleDateString('ar-EG')}</div>
-      </div>
-      <div class="net-box">
-        <div class="net-label">صافي الربح</div>
-        <div class="net-val" style="color:${netProfit>=0?'#86efac':'#fca5a5'}">${_n(netProfit)}</div>
-      </div>
-    </div>
-
-    <!-- KPIs -->
-    <div class="grid4">
-      <div class="kpi"><div class="kpi-label">💰 إجمالي الإيراد</div><div class="kpi-val" style="color:#1d4ed8">${_n(grandRev)}</div></div>
-      <div class="kpi"><div class="kpi-label">💸 إجمالي المصاريف</div><div class="kpi-val" style="color:#dc2626">${_n(totalExp)}</div></div>
-      <div class="kpi"><div class="kpi-label">📈 صافي الربح</div><div class="kpi-val" style="color:${netProfit>=0?'#16a34a':'#dc2626'}">${_n(netProfit)}</div></div>
-      <div class="kpi"><div class="kpi-label">🏦 رأس المال</div><div class="kpi-val" style="color:#7c3aed">${_n(capital)}</div></div>
-    </div>
-
-    <!-- Revenue breakdown -->
-    <div class="section">💰 تفصيل الإيرادات</div>
-    <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:14px">
-      ${revBars||'<p style="color:#94a3b8;text-align:center">لا توجد إيرادات</p>'}
-      <div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0">
-        <strong>إجمالي الإيراد</strong>
-        <strong style="color:#1d4ed8">${_n(grandRev)}</strong>
-      </div>
-    </div>
-
-    <!-- Expenses -->
-    <div class="section">💸 تفصيل المصاريف</div>
-    ${expTable}
-
-    <!-- Capital & Partners -->
-    <div class="section">🏦 رأس المال والشركاء</div>
-    <div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-        <span style="font-weight:700">تكلفة الشراء الإجمالية</span>
-        <strong style="color:#7c3aed">${_n(capital)}</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between">
-        <span style="font-weight:700">إجمالي ما وصل للشركاء</span>
-        <strong style="color:#1d4ed8">${_n(totalDisbursed)}</strong>
-      </div>
-    </div>
-
-    <div class="section">👥 توزيع الأرباح على الشركاء</div>
-    ${companyHtml}
-    ${partnerHtml}
-
-    <div class="footer">
-      <span>${co.name||'شركة الهنا للنقل'} — التحليل المالي للودر: ${ld.name}</span>
-      <span>${new Date().toLocaleDateString('ar-EG')}</span>
-    </div>
-    <script>setTimeout(()=>window.print(),700)<\/script>
-  </body></html>`);
   w.document.close();
 }
