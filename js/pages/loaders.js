@@ -3,6 +3,9 @@
 window._LD_TAB = 'list';
 window._LD_SEL = null; // selected loader id
 
+// أنواع القيود المرتبطة باللودر التي ليست مصروفاً فعلياً (توزيع أرباح / تحصيل عميل)
+const LD_NON_EXPENSE_TYPES = ['توزيع أرباح','تحصيل عميل'];
+
 // ── Helper: cumulative net profit of a loader since purchase (no date filter) ──
 function getLoaderCumulativeProfit(ld){
   const allSarkis = DB.getAll('sarkis').filter(sk=>sk.status!=='ملغي');
@@ -21,7 +24,7 @@ function getLoaderCumulativeProfit(ld){
   DB.getAll('loaderLoading').filter(j=>j.loaderId===ld.id).forEach(j=>{
     revenue += Number(j.netClient)||0;
   });
-  const jExpenses = DB.getAll('journal').filter(j=>j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح');
+  const jExpenses = DB.getAll('journal').filter(j=>j.loaderId===ld.id && !LD_NON_EXPENSE_TYPES.includes(j.loaderExpType));
   const expenses = jExpenses.reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
   return revenue - expenses;
 }
@@ -156,7 +159,7 @@ function renderLoaderList(loaders){
 
       // Expenses from journal (مصاريف فقط — توزيعات الأرباح ليست مصروفاً)
       const jExpenses = DB.getAll('journal').filter(j=>
-        (j.entryType==='يدوي'||j.category) && j.loaderId===ld.id && j.loaderExpType!=='توزيع أرباح'
+        (j.entryType==='يدوي'||j.category) && j.loaderId===ld.id && !LD_NON_EXPENSE_TYPES.includes(j.loaderExpType)
       );
       const totalExpenses = jExpenses.reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
 
@@ -466,13 +469,13 @@ function renderLoaderReport(loaders){
               <div style="font-size:13px;font-weight:700;color:${col}">${curr(v)}</div>
             </div>`).join('')}
         </div>
-        ${jExpenses.filter(j=>j.loaderExpType!=='توزيع أرباح').length>0?`
+        ${jExpenses.filter(j=>!LD_NON_EXPENSE_TYPES.includes(j.loaderExpType)).length>0?`
         <div class="tbl-wrap mt8"><table style="font-size:10px">
           <thead><tr style="background:#dc2626;color:#fff">
             <th>التاريخ</th><th>نوع المصروف</th><th>البيان</th><th style="text-align:center">المبلغ</th>
           </tr></thead>
           <tbody>
-            ${jExpenses.filter(j=>j.loaderExpType!=='توزيع أرباح').map(j=>`<tr>
+            ${jExpenses.filter(j=>!LD_NON_EXPENSE_TYPES.includes(j.loaderExpType)).map(j=>`<tr>
               <td>${fmtDate(j.date)}</td>
               <td>${badge(j.loaderExpType||'أخرى','gray')}</td>
               <td class="text-xs">${j.description||j.notes||'—'}</td>
@@ -1223,7 +1226,7 @@ function renderLoaderStatements(loaders){
     });
     DB.getAll('loaderHours').filter(j=>j.loaderId===selId&&j.date>=from&&j.date<=to).forEach(j=>{periodRevHourly+=Number(j.netClient)||0;});
     DB.getAll('loaderLoading').filter(j=>j.loaderId===selId&&j.date>=from&&j.date<=to).forEach(j=>{periodRevLoading+=Number(j.netClient)||0;});
-    DB.getAll('journal').filter(j=>j.loaderId===ld.id&&j.loaderExpType!=='توزيع أرباح'&&(j.date||'')>=from&&(j.date||'')<=to).forEach(j=>{periodExp+=Number(j.amount||j.debitAmount)||0;});
+    DB.getAll('journal').filter(j=>j.loaderId===ld.id&&!LD_NON_EXPENSE_TYPES.includes(j.loaderExpType)&&(j.date||'')>=from&&(j.date||'')<=to).forEach(j=>{periodExp+=Number(j.amount||j.debitAmount)||0;});
   }
   const periodGrand=periodRevCubic+periodRevHourly+periodRevLoading;
   const periodProfit=periodGrand-periodExp;
@@ -1312,7 +1315,7 @@ function openLoaderStmtApprove(loaderId){
   });
   DB.getAll('loaderHours').filter(j=>j.loaderId===loaderId&&j.date>=from&&j.date<=to).forEach(j=>{revHourly+=Number(j.netClient)||0;});
   DB.getAll('loaderLoading').filter(j=>j.loaderId===loaderId&&j.date>=from&&j.date<=to).forEach(j=>{revLoading+=Number(j.netClient)||0;});
-  DB.getAll('journal').filter(j=>j.loaderId===ld.id&&j.loaderExpType!=='توزيع أرباح'&&(j.date||'')>=from&&(j.date||'')<=to).forEach(j=>{expenses+=Number(j.amount||j.debitAmount)||0;});
+  DB.getAll('journal').filter(j=>j.loaderId===ld.id&&!LD_NON_EXPENSE_TYPES.includes(j.loaderExpType)&&(j.date||'')>=from&&(j.date||'')<=to).forEach(j=>{expenses+=Number(j.amount||j.debitAmount)||0;});
   const netProfit=revCubic+revHourly+revLoading-expenses;
   const partners=ld.partners||[];
   const companyPct=100-partners.reduce((s,p)=>s+Number(p.ownershipPct||0),0);
@@ -1367,7 +1370,7 @@ function printLoaderStatement(loaderId){
     revLoading+=Number(j.netClient)||0;
     loadingRows.push(`<tr><td>${j.date}</td><td>${j.client}</td><td>${j.workType||'تحميل'}</td><td>${j.trips}</td><td>${(j.netM3||0).toFixed(1)}</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.pricePerM3||0)}/م³</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(j.netClient||0)}</td></tr>`);
   });
-  DB.getAll('journal').filter(j=>j.loaderId===ld.id&&j.loaderExpType!=='توزيع أرباح'&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to)).forEach(j=>{
+  DB.getAll('journal').filter(j=>j.loaderId===ld.id&&!LD_NON_EXPENSE_TYPES.includes(j.loaderExpType)&&(!from||(j.date||'')>=from)&&(!to||(j.date||'')<=to)).forEach(j=>{
     const amt=Number(j.amount||j.debitAmount)||0;expenses+=amt;
     expRows.push(`<tr><td>${j.date}</td><td>${j.loaderExpType||'أخرى'}</td><td>${j.description||'—'}</td><td>${new Intl.NumberFormat('ar-EG',{minimumFractionDigits:2}).format(amt)}</td></tr>`);
   });
@@ -1705,18 +1708,13 @@ function renderLoaderCollections(loaders){
 
   const clients = Object.keys(clientSales);
 
-  // Get collections per client from journal
+  // Get collections per client from journal — فقط القيود المربوطة صراحةً باللودر ونوعها 'تحصيل عميل'
   function getClientCollections(clientName){
     return DB.getAll('journal').filter(j=>{
       if(!from || !to) return false;
       const d = j.date||'';
       if(d<from || d>to) return false;
-      // تحصيل مباشر
-      if(j.entryType==='تحصيل' && j.party===clientName) return true;
-      // قيد يدوي يُدين ذمم العملاء (1010 دائن)
-      if(j.entryType==='يدوي' && j.party===clientName &&
-         j.partyType==='عميل' && j.creditCode==='1010') return true;
-      return false;
+      return j.loaderId===selId && j.loaderExpType==='تحصيل عميل' && j.party===clientName;
     }).map(j=>{
       const amount = j.entryType==='يدوي'
         ? Number(j.creditAmount)||0
@@ -1858,7 +1856,7 @@ function renderLoaderCollections(loaders){
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            ${remaining>0?`<button class="btn btn-primary btn-sm" onclick="openJrnModal('يدوي',null,{creditCode:'1010',creditName:'ذمم العملاء',party:'${clientName}',partyType:'عميل',description:'تحصيل أعمال لودر ${ld.name}'})">💵 تسجيل قيد تحصيل</button>`:''}
+            ${remaining>0?`<button class="btn btn-primary btn-sm" onclick="openJrnModal('يدوي',null,{creditCode:'1010',creditName:'ذمم العملاء',party:'${clientName}',partyType:'عميل',loaderId:${ld.id},loaderExpType:'تحصيل عميل',description:'تحصيل أعمال لودر ${ld.name}'})">💵 تسجيل قيد تحصيل</button>`:''}
           </div>
         </div>
 
@@ -1914,9 +1912,7 @@ function printLoaderCollections(loaderId){
   function getColls(clientName){
     return DB.getAll('journal').filter(j=>{
       const d=j.date||'';if(d<from||d>to) return false;
-      if(j.entryType==='تحصيل'&&j.party===clientName) return true;
-      if(j.entryType==='يدوي'&&j.party===clientName&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
-      return false;
+      return j.loaderId===loaderId && j.loaderExpType==='تحصيل عميل' && j.party===clientName;
     }).map(j=>({
       date:j.date||'',
       amount:j.entryType==='يدوي'?Number(j.creditAmount)||0:Number(j.amount)||0,
