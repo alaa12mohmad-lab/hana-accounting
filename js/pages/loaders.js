@@ -351,7 +351,7 @@ function renderLoaderReport(loaders){
     if(from && (j.date||'')<from) return false;
     if(to   && (j.date||'')>to)   return false;
     return true;
-  });
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const fuelExp  = jExpenses.filter(j=>j.loaderExpType==='سولار').reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
   const maintExp = jExpenses.filter(j=>j.loaderExpType==='صيانة').reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
   const salaryExp= jExpenses.filter(j=>j.loaderExpType==='راتب سائق').reduce((s,j)=>s+(Number(j.amount||j.debitAmount)||0),0);
