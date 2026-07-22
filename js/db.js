@@ -31,7 +31,8 @@ function initFirestoreDB(db){
       done++;
       if(done>=COLLECTIONS.length&&!_dbReady){
         _markReady();
-        if(!_cache.customers.length&&!_cache.materials.length) _seed();
+        // ملحوظة: البيانات التجريبية مبقتش بتتحمل تلقائياً — لازم المستخدم يطلبها بنفسه
+        // من صفحة الإعدادات (منطقة الخطر) عشان نمنع تلوث البيانات الحقيقية بالغلط.
       }
       if(_dbReady) _refreshPage();
     },err=>{
@@ -101,8 +102,10 @@ const DB={
 };
 
 function _seed(){
+  if(!confirm('⚠️ سيتم إضافة بيانات تجريبية (عملاء وموردون وخامات وحسابات وهمية) فوق بياناتك الحالية.\nاستخدم هذا فقط للتجربة على قاعدة بيانات فاضية تماماً — لا تستخدمه على بيانات حقيقية.\nمتأكد؟')) return;
   [{name:"الشيخ",openingBalance:450000,phone:"",notes:"",prices:[{material:"تربة زلطية",price:135,from:"2026-01-01"}]},{name:"طيبة (مشروع الخيول)",openingBalance:247200,phone:"",notes:"",prices:[{material:"تربة زلطية",price:135,from:"2026-01-01"}]},{name:"إيماك",openingBalance:130000,phone:"",notes:"",prices:[{material:"نقل مخلفات",price:100,from:"2026-01-01"}]},{name:"طيبة (بن زايد الجنوبي)",openingBalance:0,phone:"",notes:"",prices:[]},{name:"شركة ريال (موقع 400)",openingBalance:0,phone:"",notes:"",prices:[]},{name:"الشروق",openingBalance:0,phone:"",notes:"",prices:[]}].forEach(c=>DB.insert("customers",c));
   [{name:"أيمن",openingBalance:-500000,phone:"",notes:"",prices:[{material:"تربة زلطية",price:100,from:"2026-01-01"}]},{name:"أحمد الربيعي",openingBalance:-200000,phone:"",notes:"",prices:[{material:"رملة",price:65,from:"2026-01-01"}]},{name:"نادر",openingBalance:2000,phone:"",notes:"",prices:[]},{name:"تامر السيد",openingBalance:0,phone:"",notes:"",prices:[]},{name:"تبع نادر",openingBalance:0,phone:"",notes:"",prices:[]},{name:"أحمد الفيومي",openingBalance:0,phone:"",notes:"",prices:[]},{name:"أبو عمار",openingBalance:0,phone:"",notes:"",prices:[]},{name:"محمد الجرف",openingBalance:0,phone:"",notes:"",prices:[]},{name:"شديد",openingBalance:0,phone:"",notes:"",prices:[]},{name:"خالد جمعة",openingBalance:0,phone:"",notes:"",prices:[]}].forEach(s=>DB.insert("suppliers",s));
   [{name:"تربة زلطية",defaultSellPrice:135,defaultBuyPrice:100,unit:"م³"},{name:"رملة",defaultSellPrice:95,defaultBuyPrice:65,unit:"م³"},{name:"نقل مخلفات",defaultSellPrice:100,defaultBuyPrice:90,unit:"م³"},{name:"توريد زلط",defaultSellPrice:350,defaultBuyPrice:330,unit:"م³"}].forEach(m=>DB.insert("materials",m));
   [{code:"1001",name:"الصندوق",type:"أصول",openingBalance:0},{code:"1002",name:"البنك",type:"أصول",openingBalance:0},{code:"1003",name:"أوراق قبض",type:"أصول",openingBalance:0},{code:"1010",name:"ذمم العملاء",type:"أصول",openingBalance:827200},{code:"2001",name:"ذمم الموردين",type:"خصوم",openingBalance:698000},{code:"2002",name:"أوراق دفع",type:"خصوم",openingBalance:0},{code:"3001",name:"حسابات الشركاء",type:"حقوق ملكية",openingBalance:0},{code:"4000",name:"الإيرادات",type:"إيرادات",openingBalance:0},{code:"5000",name:"تكلفة المبيعات",type:"مصروفات",openingBalance:0},{code:"5010",name:"عمولات الشركاء",type:"مصروفات",openingBalance:0}].forEach(a=>DB.insert("accounts",a));
+  toast('✅ تم تحميل البيانات التجريبية');
 }
