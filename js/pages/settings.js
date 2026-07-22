@@ -146,6 +146,10 @@ function renderCompany(){
           <div class="section-title">⚠️ منطقة الخطر</div>
           <p class="text-xs text-gray mb8">حذف كامل لجميع البيانات — لا يمكن التراجع. تأكد من عمل نسخة احتياطية أولاً.</p>
           <button class="btn btn-red btn-sm" onclick="clearAllData()">🗑️ مسح كامل لجميع البيانات</button>
+          <div style="border-top:1px solid #f1f5f9;margin:10px 0;padding-top:10px">
+            <p class="text-xs text-gray mb8">🌱 تحميل بيانات تجريبية (عملاء/موردون/خامات/حسابات وهمية) — للتجربة فقط، لا تستخدمه على بيانات حقيقية.</p>
+            <button class="btn btn-gray btn-sm" onclick="_seed()">🌱 تحميل بيانات تجريبية</button>
+          </div>
         </div>
       </div>
     </div>
