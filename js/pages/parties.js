@@ -363,7 +363,7 @@ function printSuppStmt(){
     const d=new Date(j.date);
     if(!(d>=fd&&d<=td)) return false;
     if(j.entryType==='دفع'&&j.party===_SS.party) return true;
-    if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد'&&j.debitCode==='2001') return true;
+    if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد') return true;
     return false;
   }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.debitAmount)||0,paymentType:'قيد يدوي'}:j);
   const totalBuy=sarkis.reduce((s,r)=>s+(Number(r.totalBuy)||0),0);
@@ -373,8 +373,8 @@ function printSuppStmt(){
   <div class="kpis" style="margin-bottom:9px"><div class="kc"><div class="kl">الرصيد الافتتاحي</div><div class="kv">${_n(opening)}</div></div><div class="kc"><div class="kl">إجمالي المشتريات</div><div class="kv">${_n(totalBuy)}</div></div><div class="kc green"><div class="kl">إجمالي المدفوعات</div><div class="kv">${_n(totalPmt)}</div></div><div class="kc ${balance>0?'red':'green'}"><div class="kl">الرصيد المستحق</div><div class="kv">${_n(balance)}</div></div></div>
   <p style="font-weight:700;margin-bottom:5px">الحوافظ — تكاليف المورد</p>
   <table><thead><tr><th>#</th><th>التاريخ</th><th>الخامة</th><th>م³</th><th>تكلفة المورد</th><th>العميل</th></tr></thead>
-  <tbody>${sarkis.map(sk=>`<tr><td style="font-family:monospace">#${sk.id}</td><td>${_d(sk.date)}</td><td>${sk.material}</td><td style="text-align:center">${(Number(sk.totalNet)||0).toFixed(1)}</td><td style="font-weight:600">${_n(sk.totalBuy)}</td><td>${sk.client}</td></tr>`).join('')}</tbody>
-  <tfoot><tr><td colspan="3">الإجمالي</td><td style="text-align:center">${sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0).toFixed(1)}</td><td>${_n(totalBuy)}</td><td></td></tr></tfoot></table>
+  <tbody>${sarkis.map(sk=>`<tr><td style="font-family:monospace">#${sk.id}</td><td>${_d(sk.date)}</td><td>${sk.material}</td><td style="text-align:center">${(Number(sk.totalNetBuy!=null?sk.totalNetBuy:sk.totalNet)||0).toFixed(1)}</td><td style="font-weight:600">${_n(sk.totalBuy)}</td><td>${sk.client}</td></tr>`).join('')}</tbody>
+  <tfoot><tr><td colspan="3">الإجمالي</td><td style="text-align:center">${sarkis.reduce((s,r)=>s+(Number(r.totalNetBuy!=null?r.totalNetBuy:r.totalNet)||0),0).toFixed(1)}</td><td>${_n(totalBuy)}</td><td></td></tr></tfoot></table>
   <p style="font-weight:700;margin:8px 0 5px">المدفوعات من اليومية</p>
   <table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>طريقة الدفع</th><th>رقم الشيك</th><th>البيان</th></tr></thead>
   <tbody>${pmts.map(p=>`<tr><td>${_d(p.date)}</td><td style="font-weight:600;color:#C00000">${_n(p.amount)}</td><td>${p.paymentType||'—'}</td><td style="font-family:monospace">${p.chequeNo||'—'}</td><td>${p.description||'—'}</td></tr>`).join('')}</tbody>
