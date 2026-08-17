@@ -187,18 +187,22 @@ function calcSarkiTotals(lines){
     totBuy   += Number(l.buyTotal)||0;
     totTrips += Number(l.trips)||0;
   });
-  var totGross=0, totNet=0;
+  var totGross=0, totNet=0, totGrossBuy=0, totNetBuy=0;
   (lines||[]).forEach(function(l){
-    totGross += Number(l.grossCubic||l.grossSell)||0;
-    totNet   += Number(l.netCubic||l.netSell)||0;
+    totGross    += Number(l.grossCubic||l.grossSell)||0;
+    totNet      += Number(l.netCubic||l.netSell)||0;
+    totGrossBuy += Number(l.grossBuy)||0;
+    totNetBuy   += Number(l.netBuy)||0;
   });
   return {
-    totalSell:   parseFloat(totSell.toFixed(2)),
-    totalBuy:    parseFloat(totBuy.toFixed(2)),
-    totalProfit: parseFloat((totSell-totBuy).toFixed(2)),
-    totalTrips:  totTrips,
-    totalGross:  parseFloat(totGross.toFixed(3)),
-    totalNet:    parseFloat(totNet.toFixed(3)),
+    totalSell:    parseFloat(totSell.toFixed(2)),
+    totalBuy:     parseFloat(totBuy.toFixed(2)),
+    totalProfit:  parseFloat((totSell-totBuy).toFixed(2)),
+    totalTrips:   totTrips,
+    totalGross:   parseFloat(totGross.toFixed(3)),
+    totalNet:     parseFloat(totNet.toFixed(3)),
+    totalGrossBuy:parseFloat(totGrossBuy.toFixed(3)),
+    totalNetBuy:  parseFloat(totNetBuy.toFixed(3)),
   };
 }
 
