@@ -479,6 +479,8 @@ function awSaveCell(input){
     totalSell:   totals.totalSell,
     totalBuy:    totals.totalBuy,
     totalNet:    totals.totalNet||totals.totalSell,
+    totalNetBuy: totals.totalNetBuy,
+    totalGrossBuy: totals.totalGrossBuy,
     totalTrips:  totals.totalTrips,
     totalProfit: totals.totalProfit,
   }));
