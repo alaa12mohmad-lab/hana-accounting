@@ -97,7 +97,7 @@ function renderCustStmt(){
   }).map(j=>{
     if(j.entryType==='يدوي') return {...j, amount:Number(j.creditAmount)||0, paymentType:'قيد يدوي'};
     return j;
-  });
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
   const totalSarkisSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
   const totalSell=totalSarkisSell+totalHourlySell+totalLoadingSell;
@@ -325,7 +325,7 @@ function renderSuppStmt(){
   }).map(j=>{
     if(j.entryType==='يدوي') return {...j, amount:Number(j.debitAmount)||0, paymentType:'قيد يدوي'};
     return j;
-  });
+  }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
   const totalBuy=sarkis.reduce((s,r)=>s+(Number(r.totalBuy)||0),0);
   const totalPmt=pmts.reduce((s,r)=>s+(Number(r.amount)||0),0);
