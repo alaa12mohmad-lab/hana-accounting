@@ -264,8 +264,8 @@ function renderRunningBal(){
           // دفع مباشر
           txns2.push({date:j.date,type:'دفع',desc:j.description||'دفع نقدي',
             debit:Number(j.amount)||0, credit:0});
-        } else if(j.entryType==='يدوي' && j.debitCode==='2001'){
-          // قيد يدوي يخصم ذمم الموردين = دفع
+        } else if(j.entryType==='يدوي'){
+          // قيد يدوي مرتبط بهذا المورد = دفع
           txns2.push({date:j.date,type:'دفع يدوي',desc:j.description||'قيد يدوي',
             debit:Number(j.debitAmount)||0, credit:0});
         }
@@ -884,6 +884,7 @@ function calcLine(line){
   var grossC = trips * cSell;
   var netC   = Math.max(0, grossC - discS);
   line.grossCubic  = grossC;
+  line.grossSell   = grossC;
   line.netCubic    = netC;
   line.netSell     = netC;
   line.sellTotal   = netC * sPrice;
@@ -893,8 +894,8 @@ function calcLine(line){
   var bPrice = Number(line.buyPrice)||0;
   var grossB = trips * cBuy;
   var netB   = Math.max(0, grossB - discB);
-  line.grossCubic  = line.grossCubic || grossB;
-  line.netCubic    = line.netCubic  || netB;
+  line.grossBuy    = grossB;
+  line.netBuy      = netB;
   line.buyTotal    = netB * bPrice;
   line.profit      = line.sellTotal - line.buyTotal;
   return line;
@@ -948,6 +949,10 @@ window.saveQtyRow = function(btn){
     totalBuy:    totals.totalBuy,
     totalProfit: totals.totalProfit,
     totalTrips:  totals.totalTrips,
+    totalNet:    totals.totalNet,
+    totalGross:  totals.totalGross,
+    totalNetBuy: totals.totalNetBuy,
+    totalGrossBuy: totals.totalGrossBuy,
   }));
 
   var row = btn.closest('tr');
@@ -1068,7 +1073,7 @@ function exportRunningBalExcel(){
     }).forEach(function(j){
       if(j.entryType==='دفع')
         txns.push({date:j.date,type:'دفع',desc:j.description||'دفع',debit:Number(j.amount)||0,credit:0});
-      else if(j.entryType==='يدوي'&&j.debitCode==='2001')
+      else if(j.entryType==='يدوي')
         txns.push({date:j.date,type:'دفع يدوي',desc:j.description||'قيد يدوي',debit:Number(j.debitAmount)||0,credit:0});
     });
   }
