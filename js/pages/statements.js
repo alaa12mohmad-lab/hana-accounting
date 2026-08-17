@@ -44,7 +44,7 @@ function _calcOpeningBefore(type, partyName, beforeDate){
       if(j.entryType==='يدوي'&&j.party===partyName&&j.partyType==='عميل'&&j.creditCode==='1010') base -= Number(j.creditAmount)||0;
     } else {
       if(j.entryType==='دفع'&&j.party===partyName) base -= Number(j.amount)||0;
-      if(j.entryType==='يدوي'&&j.party===partyName&&j.partyType==='مورد'&&j.debitCode==='2001') base -= Number(j.debitAmount)||0;
+      if(j.entryType==='يدوي'&&j.party===partyName&&j.partyType==='مورد') base -= Number(j.debitAmount)||0;
     }
   });
 
@@ -320,7 +320,7 @@ function renderSuppStmt(){
     const d=new Date(j.date);
     if(!(d>=fd&&d<=td)) return false;
     if(j.entryType==='دفع'&&j.party===_SS.party) return true;
-    if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد'&&j.debitCode==='2001') return true;
+    if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد') return true;
     return false;
   }).map(j=>{
     if(j.entryType==='يدوي') return {...j, amount:Number(j.debitAmount)||0, paymentType:'قيد يدوي'};
@@ -329,14 +329,14 @@ function renderSuppStmt(){
 
   const totalBuy=sarkis.reduce((s,r)=>s+(Number(r.totalBuy)||0),0);
   const totalPmt=pmts.reduce((s,r)=>s+(Number(r.amount)||0),0);
-  const totalNet=sarkis.reduce((s,r)=>s+(Number(r.totalNet)||0),0);
+  const totalNet=sarkis.reduce((s,r)=>s+(Number(r.totalNetBuy!=null?r.totalNetBuy:r.totalNet)||0),0);
   const balance=opening+totalBuy-totalPmt;
   const matNames=['الكل',...materials.map(m=>m.name)];
 
   const matSummary={};
   sarkis.forEach(sk=>{
     if(!matSummary[sk.material])matSummary[sk.material]={cubic:0,buy:0,trips:0,count:0};
-    matSummary[sk.material].cubic+=(Number(sk.totalNet)||0);
+    matSummary[sk.material].cubic+=(Number(sk.totalNetBuy!=null?sk.totalNetBuy:sk.totalNet)||0);
     matSummary[sk.material].buy+=(Number(sk.totalBuy)||0);
     matSummary[sk.material].trips+=(Number(sk.totalTrips)||0);
     matSummary[sk.material].count++;
@@ -396,7 +396,7 @@ function renderSuppStmt(){
               <span class="text-xs text-gray">العميل: ${sk.client}</span>
             </div>
             <div class="flex" style="gap:12px">
-              <span class="text-xs text-gray">${(Number(sk.totalNet)||0).toFixed(1)} م³</span>
+              <span class="text-xs text-gray">${(Number(sk.totalNetBuy!=null?sk.totalNetBuy:sk.totalNet)||0).toFixed(1)} م³</span>
               <strong class="text-orange tabular">${curr(sk.totalBuy)}</strong>
               ${statusBadge(sk.status)}
             </div>
@@ -425,7 +425,7 @@ function renderSuppStmt(){
                 <td></td>
                 <td style="padding:5px 6px;text-align:center">${(sk.totalGross||0).toFixed(1)}</td>
                 <td></td>
-                <td style="padding:5px 6px;text-align:center;color:#1F4E78">${(sk.totalNet||0).toFixed(1)}</td>
+                <td style="padding:5px 6px;text-align:center;color:#1F4E78">${(sk.totalNetBuy!=null?sk.totalNetBuy:sk.totalNet||0).toFixed(1)}</td>
                 <td></td>
                 <td style="padding:5px 6px;color:#d97706">${curr(sk.totalBuy)}</td>
               </tr>
