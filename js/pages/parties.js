@@ -288,7 +288,8 @@ function printCustStmt(){
     if(j.entryType==='تحصيل'&&j.party===_CS.party) return true;
     if(j.entryType==='يدوي'&&j.party===_CS.party&&j.partyType==='عميل'&&j.creditCode==='1010') return true;
     return false;
-  }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.creditAmount)||0,paymentType:'قيد يدوي'}:j);
+  }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.creditAmount)||0,paymentType:'قيد يدوي'}:j)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
 
   const totalSarkisSell=sarkis.reduce((s,r)=>s+(Number(r.totalSell)||0),0);
   const totalSell=totalSarkisSell+totalHourlySell+totalLoadingSell;
@@ -365,7 +366,8 @@ function printSuppStmt(){
     if(j.entryType==='دفع'&&j.party===_SS.party) return true;
     if(j.entryType==='يدوي'&&j.party===_SS.party&&j.partyType==='مورد') return true;
     return false;
-  }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.debitAmount)||0,paymentType:'قيد يدوي'}:j);
+  }).map(j=>j.entryType==='يدوي'?{...j,amount:Number(j.debitAmount)||0,paymentType:'قيد يدوي'}:j)
+    .sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const totalBuy=sarkis.reduce((s,r)=>s+(Number(r.totalBuy)||0),0);
   const totalPmt=pmts.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const balance=opening+totalBuy-totalPmt;
