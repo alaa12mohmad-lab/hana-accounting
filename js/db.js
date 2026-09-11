@@ -8,6 +8,45 @@ let _db       = null;
 let _company  = {name:"شركة الهنا للنقل",address:"",phone:"",crNumber:"",vatNumber:"",city:"",email:"",activity:""};
 let _dbReady  = false;
 let _dbCBs    = [];
+let _pendingWrites = 0;
+
+// ⚠️ تحذير حقيقي من المتصفح لو المستخدم حاول يقفل الصفحة وفيه حفظ لسه ما اتأكدش من السيرفر
+window.addEventListener('beforeunload', function(e){
+  if(_pendingWrites>0){
+    e.preventDefault();
+    e.returnValue = 'فيه بيانات لسه بتتحفظ... لو قفلت دلوقتي ممكن تضيع. متأكد؟';
+    return e.returnValue;
+  }
+});
+function _trackWrite(promise){
+  _pendingWrites++;
+  _updateSaveBadge();
+  const done=()=>{ _pendingWrites=Math.max(0,_pendingWrites-1); _updateSaveBadge(); };
+  promise.then(done, done);
+  return promise;
+}
+function _updateSaveBadge(){
+  let el = document.getElementById('save-pending-badge');
+  if(_pendingWrites>0){
+    if(!el){
+      if(!document.getElementById('save-badge-style')){
+        var st=document.createElement('style');
+        st.id='save-badge-style';
+        st.textContent='@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}';
+        document.head.appendChild(st);
+      }
+      el=document.createElement('div');
+      el.id='save-pending-badge';
+      el.style.cssText='position:fixed;bottom:16px;left:16px;background:#1e293b;color:#fff;'
+        +'padding:8px 14px;border-radius:20px;z-index:9999;font-size:11px;font-family:Tahoma;'
+        +'direction:rtl;box-shadow:0 2px 8px rgba(0,0,0,.25);display:flex;align-items:center;gap:6px';
+      el.innerHTML='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fbbf24;animation:pulse 1s infinite"></span> جاري الحفظ على السيرفر... متقفلش الصفحة';
+      document.body.appendChild(el);
+    }
+  } else if(el){
+    el.remove();
+  }
+}
 
 function onDBReady(fn){ if(_dbReady) fn(); else _dbCBs.push(fn); }
 function _markReady(){ _dbReady=true; _dbCBs.forEach(f=>f()); _dbCBs=[]; }
@@ -21,7 +60,22 @@ function _refreshPage(){
 function initFirestoreDB(db){
   _db=db;
   COLLECTIONS.forEach(col=>{_cache[col]=[];_seqs[col]=1;});
-  _db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+  _db.enablePersistence({synchronizeTabs:true}).then(()=>{
+    console.log('✅ Firestore offline persistence enabled — البيانات هتتحفظ محليًا وتتزامن تلقائيًا حتى لو النت اتقطع لحظيًا');
+  }).catch(err=>{
+    console.warn('⚠️ Firestore persistence FAILED to enable:', err.code, err.message);
+    setTimeout(function(){
+      var warn=document.createElement('div');
+      warn.id='fs-persist-warn';
+      warn.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);'
+        +'background:#fef3c7;border:1px solid #f59e0b;color:#92400e;padding:10px 16px;'
+        +'border-radius:8px;z-index:9999;font-size:11px;font-family:Tahoma;text-align:center;direction:rtl;max-width:90%';
+      warn.innerHTML='⚠️ التخزين المحلي غير مفعّل ('+(err.code||'')+') — لو فتحت النظام في أكتر من تبويب/نافذة في نفس الوقت، اقفل الباقي واسيب واحدة بس. متستناش قبل ما تقفل بعد أي حفظ.'
+        +'<button onclick="this.parentElement.remove()" style="margin-right:10px;background:none;border:none;cursor:pointer;font-size:14px">×</button>';
+      if(!document.getElementById('fs-persist-warn'))
+        document.body.appendChild(warn);
+    },1500);
+  });
   let done=0;
   COLLECTIONS.forEach(col=>{
     _db.collection(col).onSnapshot(snap=>{
@@ -68,7 +122,7 @@ const DB={
     if(!_db){toast("Firebase غير متصل","error");return null;}
     const v=validate(col,data), id=_seqs[col]++, rec=auditCreate({...v,id});
     _cache[col].push(rec);
-    _db.collection(col).add(rec).catch(e=>{_cache[col]=_cache[col].filter(r=>r.id!==id);toast("خطأ في الحفظ: "+e.message,"error");});
+    _trackWrite(_db.collection(col).add(rec)).catch(e=>{_cache[col]=_cache[col].filter(r=>r.id!==id);toast("❌ فشل الحفظ فعليًا على السيرفر: "+e.message,"error");});
     return rec;
   },
   update(col,id,patch){
@@ -77,7 +131,7 @@ const DB={
     if(idx<0){toast("السجل غير موجود","error");return null;}
     const old=_cache[col][idx],v=validate(col,{...old,...patch}),upd=auditUpdate(old,v);
     _cache[col][idx]=upd;
-    if(old._fbId) _db.collection(col).doc(old._fbId).set(upd).catch(e=>{_cache[col][idx]=old;toast("خطأ في التعديل: "+e.message,"error");});
+    if(old._fbId) _trackWrite(_db.collection(col).doc(old._fbId).set(upd)).catch(e=>{_cache[col][idx]=old;toast("❌ فشل التعديل فعليًا على السيرفر: "+e.message,"error");});
     return upd;
   },
   remove(col,id){
@@ -86,7 +140,7 @@ const DB={
     if(idx<0) return;
     const old=_cache[col][idx];
     _cache[col].splice(idx,1);
-    if(old._fbId) _db.collection(col).doc(old._fbId).delete().catch(e=>{_cache[col].splice(idx,0,old);toast("خطأ في الحذف: "+e.message,"error");});
+    if(old._fbId) _trackWrite(_db.collection(col).doc(old._fbId).delete()).catch(e=>{_cache[col].splice(idx,0,old);toast("❌ فشل الحذف فعليًا على السيرفر: "+e.message,"error");});
   },
   getCompany(){return _company;},
   setCompany(d){_company={..._company,...d};_db?.collection("_cfg").doc("company").set(_company).catch(e=>toast("خطأ: "+e.message,"error"));},
