@@ -220,7 +220,7 @@ function openSarkiModal(editId){
   const materials=DB.getAll('materials');
   const trucks=DB.getAll('trucks');
 
-  if(sk){ _SK_LINES=(sk.lines||[]).map(l=>({...l})); }
+  if(sk){ _SK_LINES=(sk.lines||[]).map(l=>({...l,_sellPriceManual:true,_buyPriceManual:true})); }
   else{
     const mat=materials[0];
     _SK_LINES=[{driverName:'',plateNo:'',truckId:'',trips:'',cubicPerTrip:'',discountM:0,loaderName:'',
@@ -334,12 +334,16 @@ function onSkMaterialChange(sel){
     hint.innerHTML=parts.length?'⚡ '+parts.join(' | '):'';
   }
 
-  // Update all lines with new prices (but allow manual override)
+  // Update all lines with new prices (respects manual per-line override)
   const mat=DB.getAll('materials').find(m=>m.name===matName);
   const defSell=cPrice??mat?.defaultSellPrice??0;
   const defBuy=sPrice??mat?.defaultBuyPrice??0;
 
-  _SK_LINES=_SK_LINES.map(l=>calcLine({...l,sellPrice:defSell,buyPrice:defBuy}));
+  _SK_LINES=_SK_LINES.map(l=>calcLine({
+    ...l,
+    sellPrice: l._sellPriceManual ? l.sellPrice : defSell,
+    buyPrice:  l._buyPriceManual  ? l.buyPrice  : defBuy,
+  }));
   renderSkLines();
 }
 
@@ -371,10 +375,10 @@ function renderSkLines(){
           <input type="number" min="0" step="0.01"
             value="${line.discountSell!=null?line.discountSell:(line.discountM||'')}"
             placeholder="ع" title="خصم م³ العميل"
-            oninput="_SK_LINES[${i}].discountSell=Number(this.value);if(!_SK_LINES[${i}]._buyDiscManual){_SK_LINES[${i}].discountBuy=Number(this.value);var _bEl=document.getElementById('sk-buydisc-${i}');if(_bEl)_bEl.value=this.value;}recalcSkLine(${i})"
+            oninput="_SK_LINES[${i}].discountSell=Number(this.value);if(!_SK_LINES[${i}]._buyDiscManual){_SK_LINES[${i}].discountBuy=Number(this.value);var _bEl=this.parentNode.querySelector('[title=\'خصم م³ المورد\']');if(_bEl)_bEl.value=this.value;}recalcSkLine(${i})"
             style="width:42px;color:#1a5276;border:1px solid #1a5276;border-radius:3px;padding:2px;text-align:center;font-size:10px">
           <span style="color:#94a3b8;font-size:9px">/</span>
-          <input id="sk-buydisc-${i}" type="number" min="0" step="0.01"
+          <input type="number" min="0" step="0.01"
             value="${line.discountBuy!=null?line.discountBuy:(line.discountM||'')}"
             placeholder="م" title="خصم م³ المورد"
             oninput="_SK_LINES[${i}].discountBuy=Number(this.value);_SK_LINES[${i}]._buyDiscManual=true;recalcSkLine(${i})"
@@ -382,8 +386,8 @@ function renderSkLines(){
         </div>
       </td>
       <td class="calc-cell text-brand" id="sk-n-${i}">${(line.netSell??line.netCubic??0).toFixed(1)}</td>
-      <td><input type="number" min="0" value="${line.sellPrice||''}" placeholder="0" oninput="_SK_LINES[${i}].sellPrice=this.value;recalcSkLine(${i})" style="min-width:55px"></td>
-      <td><input type="number" min="0" value="${line.buyPrice||''}" placeholder="0" oninput="_SK_LINES[${i}].buyPrice=this.value;recalcSkLine(${i})" style="min-width:55px"></td>
+      <td><input type="number" min="0" value="${line.sellPrice||''}" placeholder="0" oninput="_SK_LINES[${i}].sellPrice=this.value;_SK_LINES[${i}]._sellPriceManual=true;recalcSkLine(${i})" style="min-width:55px"></td>
+      <td><input type="number" min="0" value="${line.buyPrice||''}" placeholder="0" oninput="_SK_LINES[${i}].buyPrice=this.value;_SK_LINES[${i}]._buyPriceManual=true;recalcSkLine(${i})" style="min-width:55px"></td>
       <td class="calc-cell nowrap text-brand" id="sk-s-${i}">${curr(line.sellTotal)}</td>
       <td class="calc-cell nowrap text-gray" id="sk-b-${i}">${curr(line.buyTotal)}</td>
       <td class="calc-cell nowrap font-bold ${(line.profit||0)>=0?'text-green':'text-red'}" id="sk-p-${i}">${curr(line.profit)}</td>
